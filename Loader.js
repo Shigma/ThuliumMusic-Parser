@@ -1,14 +1,11 @@
 const { SubtrackParser } = require('./TrackParser')
 const tmSetting = require('./Setting')
 
-const packagePath = '../../package/'
-const packageInfo = require(packagePath + 'index.json')
-
 class tmLoader {
   /**
-     * Tm Library Loader
-     * @param {Tm.Syntax} Thulium Syntax Object
-     */
+   * Tm Library Loader
+   * @param {Tm.Syntax} Thulium Syntax Object
+   */
   constructor(syntax) {
     this.Chord = tmLoader.loadChord(syntax.Chord)
     this.Package = new tmPackage(syntax.Code, syntax.Dict)
@@ -26,6 +23,7 @@ class tmLoader {
 
 class tmPackage {
   constructor(source, dict) {
+    /* eslint-disable-next-line no-new-func */
     this.Dict = new Function(`${source}
             return {${dict.map(func => func.Name).join(',')}};
         `)()
@@ -61,11 +59,11 @@ const Protocols = {
 
 class tmAPI {
   /**
-     * Thulium API
-     * @param {tmParser} Thulium Parser Object
-     * @param {tmToken} Function Token
-     * @param {tmPackageDict} Map of Functions
-     */
+   * Thulium API
+   * @param {tmParser} Thulium Parser Object
+   * @param {tmToken} Function Token
+   * @param {tmPackageDict} Map of Functions
+   */
   constructor(parser, token, dict) {
     Object.assign(this, parser)
     this.Token = token
