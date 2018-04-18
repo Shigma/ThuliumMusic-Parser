@@ -1,5 +1,5 @@
 const { SubtrackParser } = require('./TrackParser')
-const tmSetting = require('./Setting')
+const TmSetting = require('./Setting')
 
 class tmLoader {
   /**
@@ -8,7 +8,7 @@ class tmLoader {
    */
   constructor(syntax) {
     this.Chord = tmLoader.loadChord(syntax.Chord)
-    this.Package = new tmPackage(syntax.Code, syntax.Dict)
+    this.Package = new TmPackage(syntax.Code, syntax.Dict)
     this.Track = {}
   }
 
@@ -21,7 +21,7 @@ class tmLoader {
   }
 }
 
-class tmPackage {
+class TmPackage {
   constructor(source, dict) {
     /* eslint-disable-next-line no-new-func */
     this.Dict = new Function(`${source}
@@ -30,8 +30,8 @@ class tmPackage {
   }
 
   applyFunction(parser, token) {
-    const API = new tmAPI(parser, token, this.Dict)
-    return this.Dict[token.Name].apply(API, tmPackage.getArguments(token.Args))
+    const API = new TmAPI(parser, token, this.Dict)
+    return this.Dict[token.Name].apply(API, TmPackage.getArguments(token.Args))
   }
 
   static getArguments(args) {
@@ -57,7 +57,7 @@ const Protocols = {
   }
 }
 
-class tmAPI {
+class TmAPI {
   /**
    * Thulium API
    * @param {tmParser} Thulium Parser Object
@@ -73,7 +73,7 @@ class tmAPI {
   }
 
   newSettings(settings = {}) {
-    return new tmSetting(settings)
+    return new TmSetting(settings)
   }
 
   ParseTrack(track, { Protocol = 'Default', Settings = null } = {}) {
@@ -84,7 +84,7 @@ class tmAPI {
       track,
       Settings === null ? this.Settings : this.Settings.extend(Settings),
       this.Libraries,
-      tmAPI.wrap(this.Meta, Protocol)
+      TmAPI.wrap(this.Meta, Protocol)
     ).parseTrack()
   }
 

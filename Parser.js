@@ -1,5 +1,5 @@
 const Loader = require('./Loader')
-const tmSetting = require('./Setting')
+const TmSetting = require('./Setting')
 const { TrackParser } = require('./TrackParser')
 const TmError = require('./Error')
 const EPSILON = 0.0000000001
@@ -18,7 +18,7 @@ class Parser {
       Sections: undefined
     }
     this.sectionContext = {
-      Settings: new tmSetting(),
+      Settings: new TmSetting(),
       PrevFin: undefined
     }
     this.order = []

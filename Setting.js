@@ -1,4 +1,4 @@
-class tmSetting {
+class TmSetting {
   constructor({
     Key = [0],
     Volume = [1],
@@ -46,7 +46,7 @@ class tmSetting {
         return obj
       }
     }
-    const settings = new tmSetting()
+    const settings = new TmSetting()
     for (const setting in settings) {
       if (setting in settingObj) {
         settings[setting] = copy(settingObj[setting])
@@ -102,4 +102,4 @@ class tmSetting {
   }
 }
 
-module.exports = tmSetting
+module.exports = TmSetting
