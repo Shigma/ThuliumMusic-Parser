@@ -105,24 +105,8 @@ class TrackParser {
     return trackResult
   }
 
-  mergeMacro() {
-    let length = this.Content.length
-    let pointer = 0
-    while (pointer < length) {
-      const token = this.Content[pointer]
-      if (token.Type === 'Macrotrack' && token.Name in this.Libraries.Track) {
-        const macro = this.Libraries.Track[token.Name]
-        this.Content.splice(pointer, 1, ...macro)
-        length += macro.length - 1
-      } else {
-        pointer += 1
-      }
-    }
-  }
-
   preprocess() {
     this.Content = [...this.Instrument.Spec, ...this.Content]
-    this.mergeMacro()
     if (this.Content.length === 1) return
     const last = this.Content.pop()
     const last2 = this.Content.pop()
@@ -192,12 +176,22 @@ class TrackParser {
       this.Meta.Index += 1
       switch (token.Type) {
       case 'Function':
-      case 'Subtrack': {
+      case 'Subtrack': 
+      case 'Macrotrack': {
         let subtrack
         if (token.Type === 'Function') {
           subtrack = this.Libraries.Package.applyFunction(this, token)
           if (subtrack === undefined) {
             break
+          }
+        } else if (token.Type === 'Macrotrack') {
+          if (token.Name in this.Libraries.Track) {
+            subtrack = new SubtrackParser({
+              Type: 'Subtrack',
+              Content: this.Libraries.Track[token.Name]
+            }, this.Settings, this.Libraries, this.Meta).parseTrack()
+          } else {
+            throw new Error()
           }
         } else {
           subtrack = new SubtrackParser(token, this.Settings, this.Libraries, this.Meta).parseTrack()
@@ -239,22 +233,15 @@ class TrackParser {
           this.Meta.Duration = 0
         }
         break
-      case 'PedalPress':
-      case 'PedalRelease':
+      case 'Clef':
+      case 'Comment':
+      case 'Space':
+        break
+      default:
         this.Result.push({
           Type: token.Type,
           StartTime: this.Meta.Duration
         })
-        break
-      case 'Undefined':
-      case 'Sfunc':
-        throw new Error()
-        // this.pushError(TmError.Types.Track.Undefined, { Actual: token })
-        // break
-      case 'Clef':
-      case 'Comment':
-      case 'Whitespace':
-        break
       }
     }
     const returnObj = {
@@ -473,7 +460,6 @@ class SubtrackParser extends TrackParser {
   }
 
   preprocess() {
-    this.mergeMacro()
     if (this.Repeat === undefined) this.Repeat = -1
     if (this.Repeat > 0) {
       this.Content.forEach((token, index) => {
