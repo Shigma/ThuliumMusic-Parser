@@ -47,15 +47,12 @@ class TmSetting {
       }
     }
     const settings = new TmSetting()
-    for (const setting in settings) {
-      if (setting in settingObj) {
-        settings[setting] = copy(settingObj[setting])
-      } else {
-        settings[setting] = copy(this[setting])
-      }
+    for (const setting in this) {
+      settings[setting] = copy(this[setting])
     }
-    // const specialSettings = { Stac: this.Stac.slice(), Key: this.Key.slice(), Volume: this.Volume.slice() }
-    // Object.assign(newSetting, this, specialSettings, settingObj)
+    for (const setting in settingObj) {
+      settings[setting] = copy(settingObj[setting])
+    }
     return settings
   }
 

@@ -6,36 +6,37 @@ let currentType = 0
 const instr = Object.keys(instrDict)
 const drum = Object.keys(drumDict)
 
-class TrackParser {
-  static processPedal(trackResult) {
-    const content = trackResult.Content
-    let press
-    let release
-    // eslint-disable-next-line no-constant-condition
-    while (true) {
-      press = content.findIndex((tok) => tok.Type === 'PedalPress')
-      release = content.findIndex((tok) => tok.Type === 'PedalRelease')
-      if (press === -1) break
-      if (release === -1) {
-        content.splice(press, 1)
-        content.slice(press).forEach((tok) => {
-          tok.Duration = trackResult.Meta.Duration - tok.StartTime
-        })
-        break
-      }
-      while (release < press) {
-        content.splice(release, 1)
-        release = content.findIndex((tok) => tok.Type === 'PedalRelease')
-        press -= 1
-      }
-      const final = content[release].StartTime
-      content.splice(release, 1)
+function processPedal(trackResult) {
+  const content = trackResult.Content
+  let press
+  let release
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    press = content.findIndex((tok) => tok.Type === 'PedalPress')
+    release = content.findIndex((tok) => tok.Type === 'PedalRelease')
+    if (press === -1) break
+    if (release === -1) {
       content.splice(press, 1)
-      content.slice(press, release).forEach((tok) => {
-        tok.Duration = final - tok.StartTime
+      content.slice(press).forEach((tok) => {
+        tok.Duration = trackResult.Meta.Duration - tok.StartTime
       })
+      break
     }
+    while (release < press) {
+      content.splice(release, 1)
+      release = content.findIndex((tok) => tok.Type === 'PedalRelease')
+      press -= 1
+    }
+    const final = content[release].StartTime
+    content.splice(release, 1)
+    content.splice(press, 1)
+    content.slice(press, release).forEach((tok) => {
+      tok.Duration = final - tok.StartTime
+    })
   }
+}
+
+class TrackParser {
 
   static isDup(arr) {
     const length = arr.length
@@ -76,6 +77,23 @@ class TrackParser {
     this.Warnings = []
   }
 
+  epilog(result) {
+    processPedal(result)
+    let index = result.Content.length
+    while (index > 0) {
+      index -= 1
+      const token = result.Content[index]
+      if (token.Type !== 'Note') {
+        this.Warnings.push(new TmError(
+          'Track::UnknownToken',
+          { Bar: token.Bar, Index: token.Index },
+          { Content: token }
+        ))
+        result.Content.splice(index, 1)
+      }
+    }
+  }
+
   pushError(errorType, args, useLocator = true) {
     this.Warnings.push(new TmError(errorType, useLocator ? {
       Bar: this.Meta.BarCount,
@@ -93,7 +111,7 @@ class TrackParser {
       currentType = 0
     }
     const trackResult = this.parseTrackContent()
-    TrackParser.processPedal(trackResult)
+    this.epilog(trackResult)
     if (trackResult.Meta.Duration < this.Settings.FadeIn || trackResult.Meta.Duration < this.Settings.FadeOut) {
       this.pushError(TmError.Types.Track.FadeOverLong, { Actual: [this.Settings.FadeIn, this.Settings.FadeOut] }, false)
     }
@@ -240,6 +258,8 @@ class TrackParser {
       default:
         this.Result.push({
           Type: token.Type,
+          Bar: this.Meta.BarCount,
+          Index: this.Meta.Index,
           StartTime: this.Meta.Duration
         })
       }

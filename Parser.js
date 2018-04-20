@@ -28,13 +28,13 @@ class Parser {
     const result = []
     this.expandSection()
     this.generateOrder()
-    this.Sections.forEach((part) => {
-      if (part.Type === 'Section') {
-        result.push(this.parseSection(part))
+    this.Sections.forEach(token => {
+      if (token.Type === 'Section') {
+        result.push(this.parseSection(token))
       } else {
         this.libraries.Package.applyFunction({
-          Settings: this.sectionContext.Settings, Context: {}
-        }, part)
+          Settings: this.sectionContext.Settings
+        }, token)
       }
     })
     return result.filter(sect => sect.Tracks.length > 0)
@@ -165,9 +165,9 @@ class Parser {
   }
 
   /**
-     * parse section
-     * @param {Tm.Section} section
-     */
+   * parse section
+   * @param {Tm.Section} section
+   */
   parseSection(section) {
     const settings = this.sectionContext.Settings.extend()
     for (const setting of section.Settings) {
