@@ -1,13 +1,13 @@
 const { SubtrackParser } = require('./TrackParser')
 const TmSetting = require('./Setting')
 
-class tmLoader {
+class TmLoader {
   /**
    * Tm Library Loader
    * @param {Tm.Syntax} Thulium Syntax Object
    */
   constructor(syntax) {
-    this.Chord = tmLoader.loadChord(syntax.Chord)
+    this.Chord = TmLoader.loadChord(syntax.Chord)
     this.Package = new TmPackage(syntax.Code, syntax.Dict)
     this.Track = {}
   }
@@ -25,8 +25,8 @@ class TmPackage {
   constructor(source, dict) {
     /* eslint-disable-next-line no-new-func */
     this.Dict = new Function(`${source}
-            return {${dict.map(func => func.Name).join(',')}};
-        `)()
+      return {${dict.map(func => func.Name).join(',')}};
+    `)()
   }
 
   applyFunction(parser, token) {
@@ -57,12 +57,17 @@ const Protocols = {
   }
 }
 
+const NativeMethods = [
+  'mergeMeta',
+  'isLegalBar'
+]
+
 class TmAPI {
   /**
    * Thulium API
-   * @param {tmParser} Thulium Parser Object
-   * @param {tmToken} Function Token
-   * @param {tmPackageDict} Map of Functions
+   * @param {TmParser} Thulium Parser Object
+   * @param {TmToken} Function Token
+   * @param {TmPackageDict} Map of Functions
    */
   constructor(parser, token, dict) {
     Object.assign(this, parser)
@@ -70,6 +75,9 @@ class TmAPI {
     this.Library = new Proxy({}, {
       get: (_, name) => dict[name]
     })
+    for (const method of NativeMethods) {
+      this[method] = parser[method]
+    }
   }
 
   newSettings(settings = {}) {
@@ -133,4 +141,4 @@ class TmAPI {
   }
 }
 
-module.exports = tmLoader
+module.exports = TmLoader
