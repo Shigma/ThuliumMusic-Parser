@@ -1,6 +1,13 @@
 const { SubtrackParser } = require('./TrackParser')
 const TmSetting = require('./Setting')
 
+const methodTypes = [
+  'proGlobal',
+  'proMerge',
+  'epiNote',
+  'epiTrack'
+]
+
 class TmLoader {
   /**
    * Tm Library Loader
@@ -8,6 +15,7 @@ class TmLoader {
    */
   constructor(syntax) {
     this.Chord = TmLoader.loadChord(syntax.Chord)
+    this.Plugin = TmLoader.loadPlugin(syntax.Class)
     this.Package = new TmPackage(syntax.Code, syntax.Dict)
     this.Track = {}
   }
@@ -16,6 +24,22 @@ class TmLoader {
     const result = {}
     dict.forEach(chord => {
       result[chord.Notation] = chord.Pitches
+    })
+    return result
+  }
+
+  static loadPlugin(plugins) {
+    const result = {}
+    methodTypes.forEach(method => {
+      const candicates = [];
+      plugins.forEach(plugin => {
+        if (method in plugin) {
+          candicates.push(plugin[method])
+        }
+      })
+      result[method] = function() {
+        candicates.forEach(func => func(...arguments))
+      }
     })
     return result
   }
