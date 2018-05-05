@@ -63,12 +63,17 @@ class TmPackage {
       switch (arg.Type) {
       case 'Number':
       case 'String':
+      case 'Array':
         return arg.Content
       case 'Expression':
+        // FIXME: using expression parser
         /* eslint-disable-next-line no-eval */
         return eval(arg.Content.replace(/Log2/g, 'Math.log2'))
       default:
-        return arg
+        return {
+          Type: 'Subtrack',
+          Content: [arg]
+        }
       }
     })
   }
