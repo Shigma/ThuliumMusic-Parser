@@ -14,10 +14,22 @@ class TmLoader {
    * @param {Tm.Syntax} Thulium Syntax Object
    */
   constructor(syntax) {
+    this.Types = TmLoader.loadTypes(syntax.Types)
     this.Chord = TmLoader.loadChord(syntax.Chord)
     this.Plugin = TmLoader.loadPlugin(syntax.Class)
     this.Package = new TmPackage(syntax.Code, syntax.Dict)
     this.Track = {}
+  }
+
+  static loadTypes(types) {
+    const result = {}
+    for (const type in types) {
+      result[type] = {
+        preserve: types[type].preserve === undefined ? true : false,
+        class: types[type].class
+      }
+    }
+    return result
   }
 
   static loadChord(dict) {
@@ -29,7 +41,9 @@ class TmLoader {
   }
 
   static loadPlugin(plugins) {
-    const result = {}
+    const result = {
+      Classes: plugins.map(plugin => plugin.Name)
+    }
     methodTypes.forEach(method => {
       const candicates = [];
       plugins.forEach(plugin => {

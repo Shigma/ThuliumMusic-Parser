@@ -68,10 +68,13 @@ class TrackParser {
       BarFirst: 0,
       BarLast: 0,
       Duration: 0,
-      BarCount: 0, // 总小节线数
+      BarCount: 0,
       BeatCount: 0,
       TieLeft: false,
       TieRight: false
+    }
+    for (const name of libraries.Plugin.Classes) {
+      this[name] = []
     }
     this.Result = []
     this.Warnings = []
@@ -256,12 +259,16 @@ class TrackParser {
       case 'Space':
         break
       default:
-        this.Result.push({
-          Type: token.Type,
-          Bar: this.Meta.BarCount,
-          Index: this.Meta.Index,
-          StartTime: this.Meta.Duration
-        })
+        const attributes = this.Libraries.Types[token.Type]
+        if (attributes.preserve) {
+          this[attributes.class].push({
+            Type: token.Type,
+            Bar: this.Meta.BarCount,
+            Index: this.Meta.Index,
+            Time: this.Meta.Duration
+          })
+        }
+        this.Meta.After[token.Type] = true
       }
     }
     const returnObj = {
