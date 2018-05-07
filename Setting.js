@@ -1,3 +1,9 @@
+const effectTypes = [
+  'FadeOut',
+  'FadeIn',
+  'Rev'
+]
+
 class TmSetting {
   constructor({
     Key = [0],
@@ -38,20 +44,27 @@ class TmSetting {
     }
   }
 
-  extend(settingObj = {}) {
-    function copy(obj) {
-      if (obj instanceof Array) {
-        return obj.slice()
-      } else {
-        return obj
+  static deepCopy(source) {
+    if (source instanceof Array){
+      return source.map(element => TmSetting.deepCopy(element))
+    } else if (typeof source === 'object') {
+      const result = {}
+      for (const key in source) {
+        result[key] = TmSetting.deepCopy(source[key])
       }
+      return result
+    } else {
+      return source
     }
+  }
+
+  extend(settingObj = {}) {
     const settings = new TmSetting()
     for (const setting in this) {
-      settings[setting] = copy(this[setting])
+      settings[setting] = TmSetting.deepCopy(this[setting])
     }
     for (const setting in settingObj) {
-      settings[setting] = copy(settingObj[setting])
+      settings[setting] = TmSetting.deepCopy(settingObj[setting])
     }
     return settings
   }
@@ -97,6 +110,15 @@ class TmSetting {
       throw new TypeError(`Non-array value passed in as ${key}`)
     }
   }
+
+  get effects() {
+    const result = {}
+    effectTypes.forEach(key => {
+      result[key] = TmSetting.deepCopy(this[key])
+    })
+    return result
+  }
 }
 
 module.exports = TmSetting
+

@@ -115,7 +115,7 @@ class TmAPI {
   constructor(parser, token, dict) {
     Object.assign(this, parser)
     this.Token = token
-    this.Library = new Proxy({}, {
+    this.Function = new Proxy({}, {
       get: (_, name) => dict[name]
     })
     for (const method of NativeMethods) {
@@ -134,7 +134,7 @@ class TmAPI {
     return new SubtrackParser(
       track,
       Settings === null ? this.Settings : this.Settings.extend(Settings),
-      this.Libraries,
+      this.Library,
       TmAPI.wrap(this.Meta, Protocol)
     ).parseTrack()
   }

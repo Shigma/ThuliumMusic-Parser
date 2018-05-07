@@ -1,4 +1,4 @@
-const Loader = require('./Loader')
+const TmLoader = require('./Loader')
 const TmSetting = require('./Setting')
 const { TrackParser } = require('./TrackParser')
 const TmError = require('./Error')
@@ -13,7 +13,7 @@ class Parser {
    */
   constructor(data) {
     this.Sections = data.Sections
-    this.libraries = new Loader(data.Syntax)
+    this.libraries = new TmLoader(data.Syntax)
     this.result = {
       Sections: undefined
     }
@@ -72,7 +72,8 @@ class Parser {
           if (track.Instruments.length === 0) {
             track.Instruments.push({
               Name: 'Piano',
-              Spec: []
+              Spec: [],
+              Dict: {}
             })
           }
           for (const instr of track.Instruments) {

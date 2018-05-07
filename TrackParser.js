@@ -1,28 +1,17 @@
 const TmError = require('./Error')
 const NoteParser = require('./NoteParser')
-const instrDict = require('../Config/Instrument.json')
-const drumDict = require('../Config/Percussion.json')
-
-let currentType = 0
-const instr = Object.keys(instrDict)
-const drum = Object.keys(drumDict)
 
 class TrackParser {
-
-  constructor(track, instrument, sectionSettings, libraries) {
+  constructor(track, instrument, sectionSettings, library) {
     this.ID = track.ID
     this.Instrument = instrument
-    this.Libraries = libraries
+    this.Library = library
     this.Content = track.Content
     this.Settings = sectionSettings.extend()
     this.Meta = {
       Index: -1,
       NotesBeforeTie: [],
       PitchQueue: [],
-      // pitchFirst: 第一个音符,
-      // pitchLast: 最后一个音符,
-      FadeIn: this.Settings.FadeIn, // FIXME: seems buggy
-      FadeOut: this.Settings.FadeOut, // FIXME: seems buggy
       BarFirst: 0,
       BarLast: 0,
       Duration: 0,
@@ -31,7 +20,7 @@ class TrackParser {
       TieRight: false
     }
     this.Notation = {}
-    for (const name of libraries.Plugin.Classes) {
+    for (const name of library.Plugin.Classes) {
       this.Notation[name] = []
     }
     this.Result = []
@@ -47,41 +36,27 @@ class TrackParser {
 
   parseTrack() {
     this.preprocess()
-    if (instr.includes(this.Instrument.Name)) {
-      currentType = 0
-    } else if (drum.includes(this.Instrument.Name)) {
-      currentType = 1
-    } else {
-      currentType = 0
+    const result = this.parseTrackContent()
+    this.Library.Plugin.epiTrack(result)
+    if (result.Meta.Duration < this.Settings.FadeIn) {
+      this.pushError(TmError.Types.Track.FadeOverLong, { Actual: this.Settings.FadeIn }, false)
     }
-    const trackResult = this.parseTrackContent()
-    this.Libraries.Plugin.epiTrack(trackResult)
-    if (trackResult.Meta.Duration < this.Settings.FadeIn || trackResult.Meta.Duration < this.Settings.FadeOut) {
-      this.pushError(TmError.Types.Track.FadeOverLong, { Actual: [this.Settings.FadeIn, this.Settings.FadeOut] }, false)
+    if (result.Meta.Duration < this.Settings.FadeOut) {
+      this.pushError(TmError.Types.Track.FadeOverLong, { Actual: this.Settings.FadeOut }, false)
     }
-    if (!(instr.includes(this.Instrument.Name) || drum.includes(this.Instrument.Name))) {
-      this.pushError(TmError.Types.Track.Instrument, { Actual: this.Instrument }, false)
-    }
-    trackResult.Instrument = this.Instrument.Name
-    trackResult.ID = this.ID ? `${this.ID}#${this.Instrument.Name}` : this.Instrument.Name
-    return trackResult
+    result.Effects = this.Settings.effects
+    result.Instrument = this.Instrument.Name
+    result.ID = this.ID ? `${this.ID}#${this.Instrument.Name}` : this.Instrument.Name
+    return result
   }
 
   preprocess() {
     this.Content = [...this.Instrument.Spec, ...this.Content]
-    if (this.Content.length === 1) return
-    const last = this.Content.pop()
-    const last2 = this.Content.pop()
-    if (last.Type === 'BarLine' && last2.Type === 'BarLine') {
-      this.Content.push(Object.assign({}, last2, { Terminal: true }))
-    } else {
-      if (last.Type === 'BarLine') {
-        this.Content.push(last2)
-        this.Content.push(Object.assign({}, last, { Terminal: true }))
-      } else {
-        this.Content.push(last2)
-        this.Content.push(last)
-      }
+    // FIXME: optimize terminal test
+    // 1|1111|111|| FadeOut(2) <-- HANDLE THIS
+    if (this.Content.length === 0) return
+    if (this.Content[this.Content.length - 1].Type === 'BarLine') {
+      Object.assign(this.Content[this.Content.length - 1], { Terminal: true })
     }
   }
 
@@ -142,21 +117,21 @@ class TrackParser {
       case 'Macrotrack': {
         let subtrack
         if (token.Type === 'Function') {
-          subtrack = this.Libraries.Package.applyFunction(this, token)
+          subtrack = this.Library.Package.applyFunction(this, token)
           if (subtrack === undefined) {
             break
           }
         } else if (token.Type === 'Macrotrack') {
-          if (token.Name in this.Libraries.Track) {
+          if (token.Name in this.Library.Track) {
             subtrack = new SubtrackParser({
               Type: 'Subtrack',
-              Content: this.Libraries.Track[token.Name]
-            }, this.Settings, this.Libraries, this.Meta).parseTrack()
+              Content: this.Library.Track[token.Name]
+            }, this.Settings, this.Library, this.Meta).parseTrack()
           } else {
-            throw new Error()
+            throw new Error(token.Name + ' not found')
           }
         } else {
-          subtrack = new SubtrackParser(token, this.Settings, this.Libraries, this.Meta).parseTrack()
+          subtrack = new SubtrackParser(token, this.Settings, this.Library, this.Meta).parseTrack()
         }
         subtrack.Content.forEach((tok) => {
           if (tok.Type === 'Note') {
@@ -168,7 +143,7 @@ class TrackParser {
         break
       }
       case 'Note': {
-        const note = new NoteParser(token, this.Libraries, this.Settings, this.Meta).parse()
+        const note = new NoteParser(token, this.Library, this.Settings, this.Meta).parse()
         if (this.Meta.BarCount === 0) {
           this.Meta.BarFirst += note.Beat
         } else {
@@ -200,7 +175,7 @@ class TrackParser {
       case 'Space':
         break
       default:
-        const attributes = this.Libraries.Types[token.Type]
+        const attributes = this.Library.Types[token.Type]
         if (attributes.preserve) {
           this.Notation[attributes.class].push({
             Type: token.Type,
@@ -228,8 +203,8 @@ class TrackParser {
 }
 
 class SubtrackParser extends TrackParser {
-  constructor(track, settings, libraries, { PitchQueue: pitchQueue, NotesBeforeTie: notesBeforeTie, TieLeft: tieLeft }) {
-    super(track, null, settings, libraries)
+  constructor(track, settings, library, { PitchQueue: pitchQueue, NotesBeforeTie: notesBeforeTie, TieLeft: tieLeft }) {
+    super(track, null, settings, library)
     this.Repeat = track.Repeat
     if (pitchQueue === undefined) {
       this.Meta.PitchQueue = []
