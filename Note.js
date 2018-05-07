@@ -5,6 +5,7 @@ class NoteParser {
     this.Meta = meta
     this.Settings = settings
     this.Chord = library.Chord
+    this.Dict = library.PitchDict
     this.Epilog = library.Plugin.epiNote
     this.Source = note
     this.Warnings = []

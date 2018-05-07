@@ -1,6 +1,6 @@
 const TmLoader = require('./Loader')
 const TmSetting = require('./Setting')
-const { TrackParser } = require('./TrackParser')
+const { TrackParser } = require('./Track')
 const TmError = require('./Error')
 const EPSILON = 0.0000000001
 
@@ -100,23 +100,24 @@ class Parser {
     if (!sec.Tracks.every((track) => Math.abs(track.Meta.Duration - max) < EPSILON)) {
       sec.Warnings.push(new TmError(TmError.Types.Section.DiffDuration, [], { Expected: sec.Tracks.map(() => max), Actual: sec.Tracks.map((l) => l.Meta.Duration) }))
     }
-    const maxBarIni = Math.max(...sec.Tracks.map((track) => track.Meta.BarFirst))
-    const maxBarFin = Math.max(...sec.Tracks.map((track) => track.Meta.BarLast))
-    const ini = sec.Tracks.every((track) => track.Meta.BarFirst === maxBarIni)
-    const fin = sec.Tracks.every((track) => track.Meta.BarLast === maxBarFin)
-    if (!ini) {
-      sec.Warnings.push(new TmError(TmError.Types.Section.InitiativeBar, [], { Expected: maxBarIni, Actual: sec.Tracks.map((l) => l.Meta.BarFirst) }))
-    }
-    if (!fin && !Number.isNaN(maxBarFin)) {
-      sec.Warnings.push(new TmError(TmError.Types.Section.FinalBar, [], { Expected: maxBarFin, Actual: sec.Tracks.map((l) => l.Meta.BarLast) }))
-    }
-    if (fin && this.sectionContext.PrevFin === undefined) {
-      this.sectionContext.PrevFin = maxBarFin
-    } else if (fin && ini && maxBarIni !== settings.Bar && this.sectionContext.PrevFin + maxBarIni !== settings.Bar) {
-      const expected = settings.Bar - this.sectionContext.PrevFin
-      sec.Warnings.push(new TmError(TmError.Types.Section.Mismatch, [], { Expected: expected, Actual: sec.Tracks.map((l) => l.Meta.BarFirst) }))
-      this.sectionContext.PrevFin = maxBarFin
-    }
+    // const maxBarIni = Math.max(...sec.Tracks.map((track) => track.Meta.BarFirst))
+    // const maxBarFin = Math.max(...sec.Tracks.map((track) => track.Meta.BarLast))
+    // const ini = sec.Tracks.every((track) => track.Meta.BarFirst === maxBarIni)
+    // const fin = sec.Tracks.every((track) => track.Meta.BarLast === maxBarFin)
+    // FIXME: ini & fin
+    // if (!ini) {
+    //   sec.Warnings.push(new TmError(TmError.Types.Section.InitiativeBar, [], { Expected: maxBarIni, Actual: sec.Tracks.map((l) => l.Meta.BarFirst) }))
+    // }
+    // if (!fin && !Number.isNaN(maxBarFin)) {
+    //   sec.Warnings.push(new TmError(TmError.Types.Section.FinalBar, [], { Expected: maxBarFin, Actual: sec.Tracks.map((l) => l.Meta.BarLast) }))
+    // }
+    // if (fin && this.sectionContext.PrevFin === undefined) {
+    //   this.sectionContext.PrevFin = maxBarFin
+    // } else if (fin && ini && maxBarIni !== settings.Bar && this.sectionContext.PrevFin + maxBarIni !== settings.Bar) {
+    //   const expected = settings.Bar - this.sectionContext.PrevFin
+    //   sec.Warnings.push(new TmError(TmError.Types.Section.Mismatch, [], { Expected: expected, Actual: sec.Tracks.map((l) => l.Meta.BarFirst) }))
+    //   this.sectionContext.PrevFin = maxBarFin
+    // }
     return sec
   }
 }

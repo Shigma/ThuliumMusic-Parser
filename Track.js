@@ -1,5 +1,9 @@
 const TmError = require('./Error')
-const NoteParser = require('./NoteParser')
+const NoteParser = require('./Note')
+
+function equal(x, y) {
+  return Math.abs(x - y) < 0.0000001
+}
 
 class TrackParser {
   constructor(track, instrument, sectionSettings, library) {
@@ -35,9 +39,16 @@ class TrackParser {
   }
 
   parseTrack() {
-    this.preprocess()
+    this.Library.PitchDict = this.Instrument.Dict
+    this.Content = [...this.Instrument.Spec, ...this.Content]
     const result = this.parseTrackContent()
-    this.Library.Plugin.epiTrack(result)
+    const terminal = this.Warnings.findIndex(err => {
+      return err.name === 'Track::BarLength' && err.pos.Bar === this.Meta.BarCount
+    })
+    if (terminal > -1 && equal(this.Warnings[terminal].arg.Time, this.Meta.Duration)) {
+      this.Warnings.splice(terminal, 1)
+    }
+
     if (result.Meta.Duration < this.Settings.FadeIn) {
       this.pushError(TmError.Types.Track.FadeOverLong, { Actual: this.Settings.FadeIn }, false)
     }
@@ -50,22 +61,14 @@ class TrackParser {
     return result
   }
 
-  preprocess() {
-    this.Content = [...this.Instrument.Spec, ...this.Content]
-    // FIXME: optimize terminal test
-    // 1|1111|111|| FadeOut(2) <-- HANDLE THIS
-    if (this.Content.length === 0) return
-    if (this.Content[this.Content.length - 1].Type === 'BarLine') {
-      Object.assign(this.Content[this.Content.length - 1], { Terminal: true })
-    }
-  }
-
+  // FIXME: static?
+  // FIXME: merge notation
   mergeMeta(dest, src) {
     dest.Meta.PitchQueue.push(...src.Meta.PitchQueue)
     dest.Meta.Duration += src.Meta.Duration
     dest.Meta.NotesBeforeTie = src.Meta.NotesBeforeTie
     dest.Meta.TieLeft = src.Meta.TieLeft
-    dest.Warnings.push(...src.Warnings.map((warning) => {
+    dest.Warnings.push(...src.Warnings.map(warning => {
       warning.pos.unshift(Object.assign({}, {
         Bar: dest.Meta.BarCount,
         Index: dest.Meta.Index
@@ -157,15 +160,18 @@ class TrackParser {
         this.Meta.TieLeft = true
         break
       case 'BarLine':
-        this.Meta.BarCount += 1
-        if (token.Terminal !== true) {
-          if (!this.isLegalBar(this.Meta.BarLast)) {
-            this.pushError(TmError.Types.Track.BarLength, { Expected: this.Settings.Bar, Actual: this.Meta.BarFirst })
-          }
-          this.Meta.BarLast = 0
-        } else if (this.isLegalBar(this.Meta.BarLast)) {
-          this.Meta.BarLast = 0
+        if (this.Meta.BarLast > 0) {
+          this.Meta.BarCount += 1
         }
+        if (!this.isLegalBar(this.Meta.BarLast)) {
+          this.pushError(TmError.Types.Track.BarLength, {
+            Expected: this.Settings.Bar,
+            Actual: this.Meta.BarLast,
+            Time: this.Meta.Duration
+          })
+        }
+        this.Meta.BarLast = 0
+        // FIXME: overlay
         if (token.Overlay) {
           this.Meta.Duration = 0
         }
@@ -187,6 +193,7 @@ class TrackParser {
         this.Meta.After[token.Type] = true
       }
     }
+    this.Library.Plugin.epiTrack(this)
     const returnObj = {
       Notation: this.Notation,
       Content: this.Result,
@@ -198,7 +205,7 @@ class TrackParser {
   }
 
   isLegalBar(bar) {
-    return bar === undefined || Math.abs(bar - this.Settings.Bar) < 0.0000001 || bar === 0
+    return bar === undefined || equal(bar, this.Settings.Bar) || bar === 0
   }
 }
 

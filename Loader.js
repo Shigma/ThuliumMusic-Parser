@@ -1,4 +1,4 @@
-const { SubtrackParser } = require('./TrackParser')
+const { SubtrackParser } = require('./Track')
 const TmSetting = require('./Setting')
 
 const methodTypes = [
