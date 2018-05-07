@@ -1,5 +1,149 @@
 const TmError = require('./Error')
 
+class PitchParser {
+  constructor({ Pitch, PitOp = '', Chord = '', VolOp = '' }, library, settings, pitchQueue = []) {
+    this.Pitch = Pitch
+    this.PitOp = PitOp
+    this.Chord = Chord
+    this.VolOp = VolOp
+    this.Library = library
+    this.Settings = settings
+    this.PitchQueue = pitchQueue
+    this.Warnings = []
+  }
+
+  parse() {
+    let result
+
+    // Pitch
+    if (this.Pitch instanceof Array) {
+      result = [].concat(...this.Pitch.map(pitch => {
+        return new PitchParser(pitch, this.Library, this.Settings).parse()
+      }))
+    } else {
+      if (this.Library.Pitch[this.Pitch] !== undefined) {
+        result = this.Library.Pitch[this.Pitch]
+        result.forEach(note => {
+          if (note.Volume === undefined) note.Volume = 1
+          note.Volume *= this.Settings.Volume
+        })
+        if ('1' <= this.Pitch && this.Pitch <= '9') {
+          result.forEach(note => {
+            note.Fixed = false
+            note.Pitch += this.Settings.Key
+          })
+        } else {
+          result.forEach(note => {
+            note.Fixed = true
+          })
+        }
+      } else if (this.Pitch === '%') {
+        if (this.PitchQueue.length >= this.Settings.Trace) {
+          result = this.PitchQueue[this.PitchQueue.length - this.Settings.Trace]
+        } else {
+          this.warn('Note::NoPrevious', { Trace: this.Settings.Trace })
+        }
+      }
+    }
+
+    // PitOp & VolOp
+    const delta = this.PitOp.split('').reduce((sum, op) => {
+      return sum + { '#': 1, 'b': -1, '\'': 12, ',': -12 }[op]
+    }, 0)
+    const scale = this.VolOp.split('').reduce((prod, op) => {
+      return prod * (op === '>' ? this.Settings.Accent : this.Settings.Light)
+    }, 1)
+    result.forEach(note => {
+      if (!note.Fixed) {
+        note.Pitch += delta
+        note.Volume *= scale
+      }
+    })
+
+    // Chord
+    result = this.Chord.split('').reduce((notes, op) => {
+      const chord = this.Library.Chord[op]
+      const result = []
+      const length = notes.length
+      const used = new Array(length).fill(false)
+      let flag = true
+      chord.forEach(([head, tail, delta]) => {
+        if (!flag) return
+        if (head < -length || head >= length || tail < -length || tail >= length) {
+          this.warn('Note::ChordRange', { Length: length, Head: head, Tail: tail })
+          return flag = false
+        }
+        if (head < 0) head += length
+        if (tail < 0) tail += length
+        if (head > tail) {
+          this.warn('Note::ChordRange', { Length: length, Head: head, Tail: tail })
+          return flag = false
+        }
+        for (let i = head; i <= tail; i++) used[i] = true
+        const interval = notes.slice(head, tail + 1).map(obj => Object.assign({}, obj))
+        interval.forEach(note => {
+          if (!note.Fixed) note.Pitch += delta
+        })
+        if (interval.some(note => note.Fixed)) {
+          this.warn('Note::OnFixedNote', { Chord: op, Notes: interval })
+          return flag = false
+        }
+        result.push(...interval)
+      })
+      if (used.some(item => !item)) {
+        this.warn('Note::UnusedNote', { Chord: op, Notes: notes })
+      }
+      if (flag) {
+        return result
+      } else {
+        return notes
+      }
+    }, result)
+
+    return result
+  }
+
+  warn(type, args) {
+    this.Warnings.push(new TmError(type, {
+      Bar: this.Meta.BarCount,
+      Index: this.Meta.Index
+    }, args))
+  }
+}
+
+// console.log(new PitchParser({
+//   Pitch: [
+//     {
+//       Pitch: 1,
+//       Chord: 'mi'
+//     },
+//     {
+//       Pitch: 3,
+//       VolOp: '>>:'
+//     }
+//   ],
+//   PitOp: '##'
+// }, {
+//   Pitch: {
+//     1: [{ Pitch: 0 }],
+//     2: [{ Pitch: 2 }],
+//     3: [{ Pitch: 4 }],
+//     4: [{ Pitch: 5 }],
+//     5: [{ Pitch: 7 }],
+//     6: [{ Pitch: 9 }],
+//     7: [{ Pitch: 11 }]
+//   },
+//   Chord: {
+//     'm': [[0, 0, 0], [0, 0, 3], [0, 0, 7]],
+//     'i': [[1, -1, 0], [0, 0, 12]]
+//   }
+// }, {
+//   Key: -2,
+//   Volume: 1,
+//   Light: 1/2,
+//   Accent: 2
+// }).parse())
+
 class NoteParser {
   constructor(note, library, settings, meta) {
     this.Meta = meta
@@ -205,4 +349,4 @@ class NoteParser {
 NoteParser.pitchDict = { 1: 0, 2: 2, 3: 4, 4: 5, 5: 7, 6: 9, 7: 11 }
 NoteParser.pitchOperatorDict = { '#': 1, 'b': -1, '\'': 12, ',': -12 }
 
-module.exports = NoteParser
+module.exports = { NoteParser, PitchParser }

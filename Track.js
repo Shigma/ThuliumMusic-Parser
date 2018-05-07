@@ -1,5 +1,5 @@
 const TmError = require('./Error')
-const NoteParser = require('./Note')
+const { NoteParser, PitchParser } = require('./Note')
 
 function equal(x, y) {
   return Math.abs(x - y) < 0.0000001
@@ -39,7 +39,7 @@ class TrackParser {
   }
 
   parseTrack() {
-    this.Library.PitchDict = this.Instrument.Dict
+    this.Library.Pitch = this.Instrument.Dict
     this.Content = [...this.Instrument.Spec, ...this.Content]
     const result = this.parseTrackContent()
     const terminal = this.Warnings.findIndex(err => {
