@@ -21,13 +21,18 @@ class PitchParser {
     this.parsePitch()
     this.parsePitVol()
     this.parseChord()
-    return this.Result
+    return {
+      Result: this.Result,
+      Warnings: this.Warnings
+    }
   }
 
   parsePitch() {
     if (this.Pitch instanceof Array) {
       this.Result = [].concat(...this.Pitch.map(pitch => {
-        return new PitchParser(pitch, this.Library, this.Settings).parse()
+        const data = new PitchParser(pitch, this.Library, this.Settings).parse()
+        this.Warnings.push(...data.Warnings)
+        return data.Result
       }))
     } else {
       if (this.Library.Pitch[this.Pitch] !== undefined) {
@@ -51,7 +56,7 @@ class PitchParser {
           this.Result = this.PitchQueue[this.PitchQueue.length - this.Settings.Trace]
         } else {
           this.Result = []
-          this.reportError('Note::NoPrevious', { Trace: this.Settings.Trace })
+          this.report('Note::NoPrevious', { Trace: this.Settings.Trace })
         }
       }
     }
@@ -82,13 +87,13 @@ class PitchParser {
       chord.forEach(([head, tail, delta]) => {
         if (!flag) return
         if (head < -length || head >= length || tail < -length || tail >= length) {
-          this.reportError('Note::ChordRange', { Length: length, Head: head, Tail: tail })
+          this.report('Note::ChordRange', { Length: length, Head: head, Tail: tail })
           return flag = false
         }
         if (head < 0) head += length
         if (tail < 0) tail += length
         if (head > tail) {
-          this.reportError('Note::ChordRange', { Length: length, Head: head, Tail: tail })
+          this.report('Note::ChordRange', { Length: length, Head: head, Tail: tail })
           return flag = false
         }
         for (let i = head; i <= tail; i++) used[i] = true
@@ -97,13 +102,13 @@ class PitchParser {
           if (!note.Fixed) note.Pitch += delta
         })
         if (interval.some(note => note.Fixed)) {
-          this.reportError('Note::OnFixedNote', { Chord: op, Notes: interval })
+          this.report('Note::OnFixedNote', { Chord: op, Notes: interval })
           return flag = false
         }
         result.push(...interval)
       })
       if (used.some(item => !item)) {
-        this.reportError('Note::UnusedNote', { Chord: op, Notes: notes })
+        this.report('Note::UnusedNote', { Chord: op, Notes: notes })
       }
       if (flag) {
         return result
@@ -113,7 +118,7 @@ class PitchParser {
     }, this.Result)
   }
 
-  reportError(type, args = {}) {
+  report(type, args = {}) {
     this.Warnings.push(new TmError(type, {}, args))
   }
 
@@ -149,116 +154,65 @@ class PitchParser {
       }}
     })
     if (PitchParser.checkDuplicate(this.Result)) {
-      this.reportError('Note::Reduplicate', { Pitches: this.Result.Pitches })
+      this.report('Note::Reduplicate', { Pitches: this.Result.Pitches })
     }
     if (PitchParser.checkVolume(this.Result)) {
-      this.reportError('Note::VolumeRange', { Volumes: this.Result.Volumes })
+      this.report('Note::VolumeRange', { Volumes: this.Result.Volumes })
     }
-    return this.Result
+    return {
+      Result: this.Result,
+      Warnings: this.Warnings
+    }
   }
 }
 
-// console.log(new PitchParser({
-//   Pitch: [
-//     {
-//       Pitch: 1,
-//       Chord: 'mi'
-//     },
-//     {
-//       Pitch: 3,
-//       VolOp: '>>:'
-//     }
-//   ],
-//   PitOp: '##'
-// }, {
-//   Pitch: {
-//     1: [{ Pitch: 0 }],
-//     2: [{ Pitch: 2 }],
-//     3: [{ Pitch: 4 }],
-//     4: [{ Pitch: 5 }],
-//     5: [{ Pitch: 7 }],
-//     6: [{ Pitch: 9 }],
-//     7: [{ Pitch: 11 }]
-//   },
-//   Chord: {
-//     'm': [[0, 0, 0], [0, 0, 3], [0, 0, 7]],
-//     'i': [[1, -1, 0], [0, 0, 12]]
-//   }
-// }, {
-//   Key: -2,
-//   Volume: 1,
-//   Light: 1/2,
-//   Accent: 0.8
-// }, {
-//   BarCount: 0,
-//   PitchQueue: []
-// }).checkParse())
-
 class NoteParser {
   constructor(note, library, settings, meta) {
-    this.Source = note
     this.Stac = note.Stac
     this.DurOp = note.DurOp
     this.Library = library
     this.Settings = settings
     this.Meta = meta
-    this.Warnings = []
     this.Position = {
       Bar: this.Meta.BarCount,
       Index: this.Meta.Index
     }
-    this.Result = new PitchParser(note, library, settings, meta.PitchQueue).checkParse()
+    const data = new PitchParser(note, library, settings, meta.PitchQueue).checkParse()
+    this.Result = data.Result
+    this.Warnings = data.Warnings
+    this.Warnings.forEach(err => err.pos = this.Position)
   }
 
-  reportError(type, args = {}) {
+  report(type, args = {}) {
     this.Warnings.push(new TmError(type, this.Position, args))
-  }
-
-  mergeError(errors) {
-    errors.forEach(err => err.pos = this.Position)
-    this.Warnings.push(...errors)
   }
 
   parse() {
     const beat = this.parseBeat(note)
     const duration = beat * 60 / this.Settings.Speed
-    const scale = 1 - this.Settings.Stac[this.Stac]
 
-    this.Meta.PitchQueue.push(this.Result.map())
+    let scale
+    if (this.Stac > this.Settings.Stac.length) {
+      scale = 1
+      this.report('Note::NoStacRef', {
+        Length: this.Settings.Stac.length,
+        Actual: this.Stac
+      })
+    } else {
+      scale = 1 - this.Settings.Stac[this.Stac] 
+    }
 
-    const result = []
-    const notesBeforeTie = []
-    // merge pitches with previous ones if tie exists
-    if (this.Meta.TieLeft) {
-      this.Meta.TieLeft = false
-      this.Meta.NotesBeforeTie.forEach((prevNote) => {
-        const index = pitches.indexOf(prevNote.Pitch)
-        if (index === -1 || prevNote.Volume !== volumes[index]) return
-        notesBeforeTie.push(prevNote)
-        prevNote.__oriDur += actualDuration
-        prevNote.Duration = prevNote.__oriDur
-        pitches.splice(index, 1)
-        volumes.splice(index, 1)
-      })
-    }
-    for (var index = 0, length = pitches.length; index < length; index++) {
-      result.push({
-        Type: 'Note',
-        Pitch: pitches[index],
-        Volume: volumes[index],
-        Duration: actualDuration,
-        __oriDur: duration,
-        Beat: beat,
-        StartTime: this.Meta.Duration,
-        StartBeat: this.Meta.BeatCount
-      })
-    }
-    this.Meta.NotesBeforeTie = notesBeforeTie.concat(result)
+    this.Meta.PitchQueue.push(this.Result.Pitches)
     this.Meta.Duration += duration
-    this.Meta.BeatCount += beat
+    this.Result.forEach(note => {
+      note.StartTime = this.Meta.Duration
+      note.Duration = duration * scale
+    })
+
+    this.Library.Plugin.epiNote(this)
     return {
-      Notes: result,
       Beat: beat,
+      Result: this.Result,
       Warnings: this.Warnings
     }
   }
@@ -293,8 +247,5 @@ class NoteParser {
     return beat * Math.pow(2, -this.Settings.Duration)
   }
 }
-
-NoteParser.pitchDict = { 1: 0, 2: 2, 3: 4, 4: 5, 5: 7, 6: 9, 7: 11 }
-NoteParser.pitchOperatorDict = { '#': 1, 'b': -1, '\'': 12, ',': -12 }
 
 module.exports = { NoteParser, PitchParser }

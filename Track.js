@@ -153,7 +153,7 @@ class TrackParser {
           this.Meta.BarLast += note.Beat
         }
         this.Warnings.push(...note.Warnings)
-        this.Result.push(...note.Notes)
+        this.Result.push(...note.Result)
         break
       }
       case 'Tie':

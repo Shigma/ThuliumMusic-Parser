@@ -6,8 +6,8 @@ const effectTypes = [
 
 class TmSetting {
   constructor({
-    Key = [0],
-    Volume = [1],
+    Key = 0,
+    Volume = 1,
     Bar = 4,
     Beat = 4,
     Speed = 60,
