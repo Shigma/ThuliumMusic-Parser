@@ -183,20 +183,20 @@ class NoteParser {
     const actualDuration = duration * (1 - this.Settings.Stac[note.Stac])
 
     // calculate pitch array and record it for further trace
-    if (note.Pitches.length === 1 && note.Pitches[0].Degree === '%') {
+    if (note.Pitch.length === 1 && note.Pitch[0].Pitch === '%') {
       if (this.Meta.PitchQueue.length >= this.Settings.Trace) {
         const delta = this.parseDeltaPitch(note.PitOp)
         const queue = this.Meta.PitchQueue[this.Meta.PitchQueue.length - this.Settings.Trace]
         pitchQueue.push(...queue)
         pitches.push(...[].concat(...queue.map((pitch) => this.Settings.Key.map((key) => key - this.Settings.Key[0] + pitch + delta))))
-        volumes.push(...[].concat(...new Array(queue.length).fill(this.getVolume(note.VolOp + note.Pitches[0].VolOp))))
+        volumes.push(...[].concat(...new Array(queue.length).fill(this.getVolume(note.VolOp + note.Pitch[0].VolOp))))
       } else {
         this.warn(TmError.Types.Note.NoPrevious, { Expected: this.Settings.Trace, Actual: this.Meta.PitchQueue.length })
       }
     } else {
-      for (const pitch of note.Pitches) {
-        if (pitch.Degree === '0') continue
-        if (pitch.Degree === 'x') {
+      for (const pitch of note.Pitch) {
+        if (pitch.Pitch === '0') continue
+        if (pitch.Pitch === 'x') {
           pitches.push(null)
           volumes.push(this.Settings.Volume[0] * note.VolOp.split('').reduce((sum, cur) => sum * cur === '>' ? this.Settings.Accent : cur === ':' ? this.Settings.Light : 1, 1))
         } else if (pitch.Chord === '') {
@@ -306,7 +306,7 @@ class NoteParser {
   }
 
   parsePitch(pitch, base) {
-    const delta = this.parseDeltaPitch(base) + NoteParser.pitchDict[pitch.Degree] + this.parseDeltaPitch(pitch.PitOp)
+    const delta = this.parseDeltaPitch(base) + NoteParser.pitchDict[pitch.Pitch] + this.parseDeltaPitch(pitch.PitOp)
     return this.Settings.Key.map((key) => key + delta)
   }
 
