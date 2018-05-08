@@ -1,7 +1,12 @@
 const TmError = require('./Error')
 
 class PitchParser {
-  constructor({ Pitch, PitOp = '', Chord = '', VolOp = '' }, library, settings, pitchQueue = []) {
+  constructor({
+    Pitch,
+    PitOp = '',
+    Chord = '',
+    VolOp = ''
+  }, library, settings, pitchQueue) {
     this.Pitch = Pitch
     this.PitOp = PitOp
     this.Chord = Chord
@@ -13,55 +18,62 @@ class PitchParser {
   }
 
   parse() {
-    let result
+    this.parsePitch()
+    this.parsePitVol()
+    this.parseChord()
+    return this.Result
+  }
 
-    // Pitch
+  parsePitch() {
     if (this.Pitch instanceof Array) {
-      result = [].concat(...this.Pitch.map(pitch => {
+      this.Result = [].concat(...this.Pitch.map(pitch => {
         return new PitchParser(pitch, this.Library, this.Settings).parse()
       }))
     } else {
       if (this.Library.Pitch[this.Pitch] !== undefined) {
-        result = this.Library.Pitch[this.Pitch]
-        result.forEach(note => {
+        this.Result = this.Library.Pitch[this.Pitch]
+        this.Result.forEach(note => {
           if (note.Volume === undefined) note.Volume = 1
           note.Volume *= this.Settings.Volume
         })
         if ('1' <= this.Pitch && this.Pitch <= '9') {
-          result.forEach(note => {
+          this.Result.forEach(note => {
             note.Fixed = false
             note.Pitch += this.Settings.Key
           })
         } else {
-          result.forEach(note => {
+          this.Result.forEach(note => {
             note.Fixed = true
           })
         }
       } else if (this.Pitch === '%') {
         if (this.PitchQueue.length >= this.Settings.Trace) {
-          result = this.PitchQueue[this.PitchQueue.length - this.Settings.Trace]
+          this.Result = this.PitchQueue[this.PitchQueue.length - this.Settings.Trace]
         } else {
-          this.warn('Note::NoPrevious', { Trace: this.Settings.Trace })
+          this.Result = []
+          this.reportError('Note::NoPrevious', { Trace: this.Settings.Trace })
         }
       }
     }
+  }
 
-    // PitOp & VolOp
+  parsePitVol() {
     const delta = this.PitOp.split('').reduce((sum, op) => {
       return sum + { '#': 1, 'b': -1, '\'': 12, ',': -12 }[op]
     }, 0)
     const scale = this.VolOp.split('').reduce((prod, op) => {
       return prod * (op === '>' ? this.Settings.Accent : this.Settings.Light)
     }, 1)
-    result.forEach(note => {
+    this.Result.forEach(note => {
+      note.Volume *= scale
       if (!note.Fixed) {
         note.Pitch += delta
-        note.Volume *= scale
       }
     })
+  }
 
-    // Chord
-    result = this.Chord.split('').reduce((notes, op) => {
+  parseChord() {
+    this.Result = this.Chord.split('').reduce((notes, op) => {
       const chord = this.Library.Chord[op]
       const result = []
       const length = notes.length
@@ -70,13 +82,13 @@ class PitchParser {
       chord.forEach(([head, tail, delta]) => {
         if (!flag) return
         if (head < -length || head >= length || tail < -length || tail >= length) {
-          this.warn('Note::ChordRange', { Length: length, Head: head, Tail: tail })
+          this.reportError('Note::ChordRange', { Length: length, Head: head, Tail: tail })
           return flag = false
         }
         if (head < 0) head += length
         if (tail < 0) tail += length
         if (head > tail) {
-          this.warn('Note::ChordRange', { Length: length, Head: head, Tail: tail })
+          this.reportError('Note::ChordRange', { Length: length, Head: head, Tail: tail })
           return flag = false
         }
         for (let i = head; i <= tail; i++) used[i] = true
@@ -85,29 +97,64 @@ class PitchParser {
           if (!note.Fixed) note.Pitch += delta
         })
         if (interval.some(note => note.Fixed)) {
-          this.warn('Note::OnFixedNote', { Chord: op, Notes: interval })
+          this.reportError('Note::OnFixedNote', { Chord: op, Notes: interval })
           return flag = false
         }
         result.push(...interval)
       })
       if (used.some(item => !item)) {
-        this.warn('Note::UnusedNote', { Chord: op, Notes: notes })
+        this.reportError('Note::UnusedNote', { Chord: op, Notes: notes })
       }
       if (flag) {
         return result
       } else {
         return notes
       }
-    }, result)
-
-    return result
+    }, this.Result)
   }
 
-  warn(type, args) {
-    this.Warnings.push(new TmError(type, {
-      Bar: this.Meta.BarCount,
-      Index: this.Meta.Index
-    }, args))
+  reportError(type, args = {}) {
+    this.Warnings.push(new TmError(type, {}, args))
+  }
+
+  static checkDuplicate(result) {
+    const length = result.length
+    let i = -1
+    while (i++ < length) {
+      for (let j = i + 1; j < length; ++j) {
+        if (result[i].Pitch === result[j].Pitch) return true
+      }
+    }
+    return false
+  }
+
+  static checkVolume(result) {
+    let flag = false
+    result.forEach(note => {
+      if (note.Volume > 1) {
+        note.Volume = 1
+        flag = true
+      }
+    })
+    return flag
+  }
+
+  checkParse() {
+    Object.defineProperties(this.parse(), {
+      Pitches: { get: function() {
+        return this.map(note => note.Pitch)
+      }},
+      Volumes: { get: function() {
+        return this.map(note => note.Volume)
+      }}
+    })
+    if (PitchParser.checkDuplicate(this.Result)) {
+      this.reportError('Note::Reduplicate', { Pitches: this.Result.Pitches })
+    }
+    if (PitchParser.checkVolume(this.Result)) {
+      this.reportError('Note::VolumeRange', { Volumes: this.Result.Volumes })
+    }
+    return this.Result
   }
 }
 
@@ -141,92 +188,43 @@ class PitchParser {
 //   Key: -2,
 //   Volume: 1,
 //   Light: 1/2,
-//   Accent: 2
-// }).parse())
+//   Accent: 0.8
+// }, {
+//   BarCount: 0,
+//   PitchQueue: []
+// }).checkParse())
 
 class NoteParser {
   constructor(note, library, settings, meta) {
-    this.Meta = meta
-    this.Settings = settings
-    this.Chord = library.Chord
-    this.Dict = library.PitchDict
-    this.Epilog = library.Plugin.epiNote
     this.Source = note
+    this.Stac = note.Stac
+    this.DurOp = note.DurOp
+    this.Library = library
+    this.Settings = settings
+    this.Meta = meta
     this.Warnings = []
-  }
-
-  static isDup(arr) {
-    const length = arr.length
-    let i = -1
-    while (i++ < length) {
-      for (let j = i + 1; j < length; ++j) {
-        if (arr[i] === arr[j]) return true
-      }
-    }
-    return false
-  }
-
-  warn(type, args) {
-    this.Warnings.push(new TmError(type, {
+    this.Position = {
       Bar: this.Meta.BarCount,
       Index: this.Meta.Index
-    }, args))
+    }
+    this.Result = new PitchParser(note, library, settings, meta.PitchQueue).checkParse()
+  }
+
+  reportError(type, args = {}) {
+    this.Warnings.push(new TmError(type, this.Position, args))
+  }
+
+  mergeError(errors) {
+    errors.forEach(err => err.pos = this.Position)
+    this.Warnings.push(...errors)
   }
 
   parse() {
-    const note = this.Source
-    const pitches = []
-    const pitchQueue = []
-    const volumes = []
     const beat = this.parseBeat(note)
     const duration = beat * 60 / this.Settings.Speed
-    const actualDuration = duration * (1 - this.Settings.Stac[note.Stac])
+    const scale = 1 - this.Settings.Stac[this.Stac]
 
-    // calculate pitch array and record it for further trace
-    if (note.Pitch.length === 1 && note.Pitch[0].Pitch === '%') {
-      if (this.Meta.PitchQueue.length >= this.Settings.Trace) {
-        const delta = this.parseDeltaPitch(note.PitOp)
-        const queue = this.Meta.PitchQueue[this.Meta.PitchQueue.length - this.Settings.Trace]
-        pitchQueue.push(...queue)
-        pitches.push(...[].concat(...queue.map((pitch) => this.Settings.Key.map((key) => key - this.Settings.Key[0] + pitch + delta))))
-        volumes.push(...[].concat(...new Array(queue.length).fill(this.getVolume(note.VolOp + note.Pitch[0].VolOp))))
-      } else {
-        this.warn(TmError.Types.Note.NoPrevious, { Expected: this.Settings.Trace, Actual: this.Meta.PitchQueue.length })
-      }
-    } else {
-      for (const pitch of note.Pitch) {
-        if (pitch.Pitch === '0') continue
-        if (pitch.Pitch === 'x') {
-          pitches.push(null)
-          volumes.push(this.Settings.Volume[0] * note.VolOp.split('').reduce((sum, cur) => sum * cur === '>' ? this.Settings.Accent : cur === ':' ? this.Settings.Light : 1, 1))
-        } else if (pitch.Chord === '') {
-          const temp = this.parsePitch(pitch, note.PitOp)
-          pitchQueue.push(temp[0])
-          pitches.push(...temp)
-          volumes.push(...this.getVolume(note.VolOp + pitch.VolOp))
-        } else {
-          const basePitch = this.parsePitch(pitch, note.PitOp)
-          const chords = this.parseChord(pitch)
-          pitchQueue.push(...chords.map(subPitch => subPitch + basePitch[0]))
-          pitches.push(...[].concat(...chords.map((subPitch) => basePitch.map((delta) => subPitch + delta))))
-          volumes.push(...[].concat(...new Array(chords.length).fill(this.getVolume(note.VolOp + pitch.VolOp))))
-        }
-      }
-    }
-    if (!volumes.every((vol) => vol <= 1)) {
-      this.warn(TmError.Types.Note.VolumeLimit, { Actual: volumes })
-      volumes.forEach((vol, index, arr) => {
-        if (vol > 1) {
-          arr[index] = 1
-        }
-      })
-    }
-    if (NoteParser.isDup(pitches)) {
-      this.warn(TmError.Types.Note.Reduplicate, { Actual: pitches })
-    }
-    if (pitchQueue.length > 0) {
-      this.Meta.PitchQueue.push(pitchQueue.slice(0))
-    }
+    this.Meta.PitchQueue.push(this.Result.map())
 
     const result = []
     const notesBeforeTie = []
@@ -265,84 +263,34 @@ class NoteParser {
     }
   }
 
-  getVolume(volOp) {
-    const scale = volOp.split('').reduce((sum, cur) => sum * (cur === '>' ? this.Settings.Accent : (cur === ':' ? this.Settings.Light : 1)), 1)
-    const total = this.Settings.Key.length
-    const vol = this.Settings.Volume.length
-    return [...this.Settings.Volume, ...new Array(total - vol).fill(this.Settings.Volume[vol - 1])].map((v) => v * scale)
-  }
-
-  parseChord(pitch) {
-    return pitch.Chord.split('').reduce((pitches, chord) => {
-      const operator = this.Chord[chord]
-      const res = []
-      const length = pitches.length
-      const all = new Array(length).fill(true)
-      operator.forEach(([head, tail, delta]) => {
-        if (head < 0) {
-          if (head < -length) {
-            this.warn(TmError.Types.Note.ChordRange, { Expected: -length, Actual: head })
-          }
-          head += length
-        } else if (head >= length) {
-          this.warn(TmError.Types.Note.ChordRange, { Expected: length - 1, Actual: head })
-        }
-        if (tail < 0) {
-          if (tail < -length) {
-            this.warn(TmError.Types.Note.ChordRange, { Expected: -length, Actual: tail })
-          }
-          tail += length
-        } else if (tail >= length) {
-          this.warn(TmError.Types.Note.ChordRange, { Expected: length - 1, Actual: tail })
-        }
-        for (let i = head; i <= tail; i++) {
-          all[i] = false
-        }
-        res.push(...pitches.slice(head, tail + 1).map((pitch) => pitch + delta))
-      })
-      if (!all.every((e) => !e)) this.warn(TmError.Types.Note.ChordOverride, {})
-      return res
-    }, [0])
-  }
-
-  parsePitch(pitch, base) {
-    const delta = this.parseDeltaPitch(base) + NoteParser.pitchDict[pitch.Pitch] + this.parseDeltaPitch(pitch.PitOp)
-    return this.Settings.Key.map((key) => key + delta)
-  }
-
-  parseDeltaPitch(pitchOperators) {
-    return pitchOperators.split('').reduce((sum, cur) => sum + NoteParser.pitchOperatorDict[cur], 0)
-  }
-
-  parseBeat(note) {
-    let duration = 1
+  parseBeat() {
+    let beat = 1
     let pointer = 0
-    let dotCount = 0
-    const length = note.DurOp.length
+    const length = this.DurOp.length
     while (pointer < length) {
-      const char = note.DurOp.charAt(pointer)
+      const char = this.DurOp.charAt(pointer)
       pointer += 1
       switch (char) {
       case '=':
-        duration /= 4
+        beat /= 4
         break
       case '-':
-        duration += 1
+        beat += 1
         break
       case '_':
-        duration /= 2
+        beat /= 2
         break
       case '.':
-        dotCount = 1
-        while (note.DurOp.charAt(pointer) === '.') {
+        let dotCount = 1
+        while (this.DurOp.charAt(pointer) === '.') {
           dotCount += 1
           pointer += 1
         }
-        duration *= 2 - Math.pow(2, -dotCount)
+        beat *= 2 - Math.pow(2, -dotCount)
         break
       }
     }
-    return duration * Math.pow(2, -this.Settings.Duration)
+    return beat * Math.pow(2, -this.Settings.Duration)
   }
 }
 
