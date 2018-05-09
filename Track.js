@@ -33,7 +33,6 @@ class TrackParser {
     for (const name of library.Plugin.Classes) {
       this.Notation[name] = []
     }
-    this.Result = []
     this.Warnings = []
   }
 
@@ -135,8 +134,9 @@ class TrackParser {
     // FIXME: merge warnings
   }
 
-  parseTrackContent() {
-    for (const token of this.Content) {
+  parseTrackContent(content = this.Content) {
+    const result = []
+    for (const token of content) {
       this.Meta.Index += 1
       switch (token.Type) {
       case 'Function':
@@ -176,7 +176,7 @@ class TrackParser {
           }))
         }
         this.Meta.Duration += max
-        this.Result.push(...[].concat(...subtracks.map(subtrack => subtrack.Content)))
+        result.push(...[].concat(...subtracks.map(subtrack => subtrack.Content)))
         break
       }
       case 'Note': {
@@ -187,7 +187,7 @@ class TrackParser {
           this.Meta.BarLast += note.Beat
         }
         this.Warnings.push(...note.Warnings)
-        this.Result.push(...note.Result)
+        result.push(...note.Result)
         break
       }
       case 'BarLine':
@@ -202,10 +202,6 @@ class TrackParser {
           })
         }
         this.Meta.BarLast = 0
-        // FIXME: overlay
-        if (token.Overlay) {
-          this.Meta.Duration = 0
-        }
         break
       case 'Clef':
       case 'Comment':
@@ -227,7 +223,7 @@ class TrackParser {
     this.Library.Plugin.epiTrack(this)
     const returnObj = {
       Notation: this.Notation,
-      Content: this.Result,
+      Content: result,
       Warnings: this.Warnings,
       Settings: this.Settings,
       Meta: this.Meta
@@ -245,7 +241,6 @@ class SubtrackParser extends TrackParser {
     super(track, null, settings, library)
     this.Meta.PitchQueue = PitchQueue
     this.Repeat = track.Repeat
-    if (this.Repeat === undefined) this.Repeat = -1
   }
 
   parseTrack() {
@@ -258,6 +253,7 @@ class SubtrackParser extends TrackParser {
       if (token.Type === 'BarLine' && token.Overlay) {
         results.push(this.parseTrackContent(this.Content.slice(lastIndex, index)))
         lastIndex = index + 1
+        this.Meta.Duration = 0 // FIXME: this.Settings
       }
     })
     results.push(this.parseTrackContent(this.Content.slice(lastIndex)))
@@ -265,6 +261,7 @@ class SubtrackParser extends TrackParser {
   }
 
   preprocess() {
+    if (this.Repeat === undefined) this.Repeat = -1
     if (this.Repeat > 0) {
       this.Content.forEach((token, index) => {
         if (token.Type === 'BarLine' && token.Skip) {

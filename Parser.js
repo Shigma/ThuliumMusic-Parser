@@ -4,6 +4,16 @@ const { TrackParser } = require('./Track')
 const TmError = require('./Error')
 const EPSILON = 0.0000000001
 
+const defaultPitchDict = [
+  { Name: '1', Pitches: 0 },
+  { Name: '2', Pitches: 2 },
+  { Name: '3', Pitches: 4 },
+  { Name: '4', Pitches: 5 },
+  { Name: '5', Pitches: 7 },
+  { Name: '6', Pitches: 9 },
+  { Name: '7', Pitches: 11 }
+]
+
 class Parser {
   /**
    * Tm Parser
@@ -73,7 +83,7 @@ class Parser {
             track.Instruments.push({
               Name: 'Piano',
               Spec: [],
-              Dict: {}
+              Dict: defaultPitchDict
             })
           }
           for (const instr of track.Instruments) {

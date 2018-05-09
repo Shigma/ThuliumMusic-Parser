@@ -30,7 +30,7 @@ class PitchParser {
   parsePitch() {
     if (this.Pitch instanceof Array) {
       this.Result = [].concat(...this.Pitch.map(pitch => {
-        const data = new PitchParser(pitch, this.Library, this.Settings).parse()
+        const data = new PitchParser(pitch, this.Library, this.Settings, this.PitchQueue).parse()
         this.Warnings.push(...data.Warnings)
         return data.Result
       }))
@@ -53,7 +53,13 @@ class PitchParser {
         }
       } else if (this.Pitch === '%') {
         if (this.PitchQueue.length >= this.Settings.Trace) {
-          this.Result = this.PitchQueue[this.PitchQueue.length - this.Settings.Trace]
+          this.Result = this.PitchQueue[this.PitchQueue.length - this.Settings.Trace].map(pitch => {
+            return {
+              Pitch: pitch,
+              Volume: 1,
+              Fixed: false
+            }
+          })
         } else {
           this.Result = []
           this.report('Note::NoPrevious', { Trace: this.Settings.Trace })
