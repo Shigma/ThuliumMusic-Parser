@@ -1,4 +1,5 @@
 const TmError = require('./Error')
+const TmSetting = require('./Setting')
 const { NoteParser, PitchParser } = require('./Note')
 
 function equal(x, y) {
@@ -14,14 +15,19 @@ class TrackParser {
     this.Settings = sectionSettings.extend()
     this.Meta = {
       Index: -1,
-      NotesBeforeTie: [],
       PitchQueue: [],
       BarFirst: 0,
       BarLast: 0,
-      Duration: 0,
       BarCount: 0,
-      TieLeft: false,
-      TieRight: false
+      Duration: 0,
+      After: {}
+    }
+    for (const attr in library.MetaInit) {
+      if (library.MetaInit[attr] instanceof Array) {
+        this.Meta[attr] = library.MetaInit[attr].slice()
+      } else {
+        this.Meta[attr] = library.MetaInit[attr]
+      }
     }
     this.Notation = {}
     for (const name of library.Plugin.Classes) {
@@ -35,11 +41,30 @@ class TrackParser {
     this.Warnings.push(new TmError(errorType, useLocator ? {
       Bar: this.Meta.BarCount,
       Index: this.Meta.Index
-    } : null, args))
+    } : {}, args))
   }
 
   parseTrack() {
-    this.Library.Pitch = this.Instrument.Dict
+    this.Library.Pitch = {}
+    this.Instrument.Dict.forEach(macro => {
+      if (!(macro.Pitches instanceof Array)) {
+        this.Library.Pitch[macro.Name] = Object.assign([{
+          Pitch: macro.Pitches
+        }], { Generated: true })
+      } else if (macro.Pitches.Generated) {
+        this.Library.Pitch[macro.Name] = macro.Pitches
+      } else {
+        const data = new PitchParser(
+          { Pitch: macro.Pitches },
+          this.Library,
+          new TmSetting()
+        ).checkParse()
+        this.Library.Pitch[macro.Name] = data.Result
+        if (data.Warnings.length > 0) {
+          this.pushError('Library::PitchInit', { Warnings: data.Warnings }, false)
+        }
+      }
+    })
     this.Content = [...this.Instrument.Spec, ...this.Content]
     const result = this.parseTrackContent()
     const terminal = this.Warnings.findIndex(err => {
@@ -64,10 +89,8 @@ class TrackParser {
   // FIXME: static?
   // FIXME: merge notation
   mergeMeta(dest, src) {
-    dest.Meta.PitchQueue.push(...src.Meta.PitchQueue)
-    dest.Meta.Duration += src.Meta.Duration
-    dest.Meta.NotesBeforeTie = src.Meta.NotesBeforeTie
-    dest.Meta.TieLeft = src.Meta.TieLeft
+    this.Library.Plugin.proMerge(null, dest, src)
+    dest.Meta.PitchQueue = src.Meta.PitchQueue
     dest.Warnings.push(...src.Warnings.map(warning => {
       warning.pos.unshift(Object.assign({}, {
         Bar: dest.Meta.BarCount,
@@ -109,6 +132,7 @@ class TrackParser {
         }
       }
     }
+    // FIXME: merge warnings
   }
 
   parseTrackContent() {
@@ -118,31 +142,41 @@ class TrackParser {
       case 'Function':
       case 'Subtrack': 
       case 'Macrotrack': {
-        let subtrack
+        let subtracks
         if (token.Type === 'Function') {
-          subtrack = this.Library.Package.applyFunction(this, token)
-          if (subtrack === undefined) {
+          subtracks = [this.Library.Package.applyFunction(this, token)]
+          if (subtracks[0] === undefined) {
             break
+            // FIXME: Test && Report Error ?
           }
         } else if (token.Type === 'Macrotrack') {
           if (token.Name in this.Library.Track) {
-            subtrack = new SubtrackParser({
+            subtracks = [new SubtrackParser({
               Type: 'Subtrack',
               Content: this.Library.Track[token.Name]
-            }, this.Settings, this.Library, this.Meta).parseTrack()
+            }, this.Settings, this.Library, this.Meta).parseTrack()]
           } else {
+            // FIXME: Report Error
             throw new Error(token.Name + ' not found')
           }
         } else {
-          subtrack = new SubtrackParser(token, this.Settings, this.Library, this.Meta).parseTrack()
+          subtracks = new SubtrackParser(token, this.Settings, this.Library, this.Meta).parseTrack()
         }
-        subtrack.Content.forEach((tok) => {
-          if (tok.Type === 'Note') {
-            tok.StartTime += this.Meta.Duration
-          }
+        subtracks.forEach(subtrack => {
+          this.mergeMeta(this, subtrack)
+          subtrack.Content.forEach(note => {
+            note.StartTime += this.Meta.Duration
+          })
         })
-        this.mergeMeta(this, subtrack)
-        this.Result.push(...subtrack.Content)
+        const max = Math.max(...subtracks.map(subtrack => subtrack.Meta.Duration))
+        if (!subtracks.every(subtrack => equal(subtrack.Meta.Duration, max))) {
+          this.Warnings.push(new TmError('Track::DiffDuration', {}, {
+            Expected: subtracks.map(() => max),
+            Actual: subtracks.map(subtrack => subtrack.Meta.Duration)
+          }))
+        }
+        this.Meta.Duration += max
+        this.Result.push(...[].concat(...subtracks.map(subtrack => subtrack.Content)))
         break
       }
       case 'Note': {
@@ -156,9 +190,6 @@ class TrackParser {
         this.Result.push(...note.Result)
         break
       }
-      case 'Tie':
-        this.Meta.TieLeft = true
-        break
       case 'BarLine':
         if (this.Meta.BarLast > 0) {
           this.Meta.BarCount += 1
@@ -199,7 +230,7 @@ class TrackParser {
       Content: this.Result,
       Warnings: this.Warnings,
       Settings: this.Settings,
-      Meta: Object.assign(this.Meta, { PitchQueue: this instanceof SubtrackParser ? this.Meta.PitchQueue.slice(this.oriPitchQueueLength) : this.Meta.PitchQueue })
+      Meta: this.Meta
     }
     return returnObj
   }
@@ -210,41 +241,39 @@ class TrackParser {
 }
 
 class SubtrackParser extends TrackParser {
-  constructor(track, settings, library, { PitchQueue: pitchQueue, NotesBeforeTie: notesBeforeTie, TieLeft: tieLeft }) {
+  constructor(track, settings, library, { PitchQueue = [] }) {
     super(track, null, settings, library)
+    this.Meta.PitchQueue = PitchQueue
     this.Repeat = track.Repeat
-    if (pitchQueue === undefined) {
-      this.Meta.PitchQueue = []
-      this.oriPitchQueueLength = 0
-    } else {
-      this.Meta.PitchQueue = pitchQueue.slice()
-      this.oriPitchQueueLength = pitchQueue.length
-    }
-    if (notesBeforeTie !== null) {
-      this.Meta.NotesBeforeTie = notesBeforeTie
-    }
-    if (tieLeft !== null) {
-      this.Meta.TieLeft = tieLeft
-    }
+    if (this.Repeat === undefined) this.Repeat = -1
   }
 
   parseTrack() {
     this.preprocess()
-    const trackResult = this.parseTrackContent(this.Content)
-    return trackResult
+
+    // FIXME: overlay security
+    const results = []
+    let lastIndex = 0
+    this.Content.forEach((token, index) => {
+      if (token.Type === 'BarLine' && token.Overlay) {
+        results.push(this.parseTrackContent(this.Content.slice(lastIndex, index)))
+        lastIndex = index + 1
+      }
+    })
+    results.push(this.parseTrackContent(this.Content.slice(lastIndex)))
+    return results
   }
 
   preprocess() {
-    if (this.Repeat === undefined) this.Repeat = -1
     if (this.Repeat > 0) {
       this.Content.forEach((token, index) => {
-        if (token.Skip === true) {
-          this.Warnings.push(new TmError(TmError.Types.Track.UnexpCoda, { index }, { Actual: token }))
+        if (token.Type === 'BarLine' && token.Skip) {
+          this.Warnings.push(new TmError(TmError.Types.Track.UnexpCoda, { Index: index }, { Actual: token }))
         }
       })
       const temp = []
-      const repeatArray = this.Content.filter((token) => token.Type === 'BarLine' && token.Order[0] !== 0)
-      const defaultOrder = repeatArray.find((token) => token.Order.length === 0)
+      const repeatArray = this.Content.filter(token => token.Type === 'BarLine' && token.Order[0] !== 0)
+      const defaultOrder = repeatArray.find(token => token.Order.length === 0)
       if (defaultOrder !== undefined) {
         const order = [].concat(...repeatArray.map((token) => token.Order))
         for (let i = 1; i < this.Repeat; i++) {

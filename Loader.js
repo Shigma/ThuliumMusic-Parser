@@ -18,6 +18,7 @@ class TmLoader {
     this.Chord = TmLoader.loadChord(syntax.Chord)
     this.Plugin = TmLoader.loadPlugin(syntax.Class)
     this.Package = new TmPackage(syntax.Code, syntax.Dict)
+    this.MetaInit = syntax.Meta
     this.Track = {}
   }
 
@@ -45,14 +46,14 @@ class TmLoader {
       Classes: plugins.map(plugin => plugin.Name)
     }
     methodTypes.forEach(method => {
-      const candicates = [];
+      const candidates = [];
       plugins.forEach(plugin => {
         if (method in plugin) {
-          candicates.push(plugin[method])
+          candidates.push(plugin[method])
         }
       })
-      result[method] = function() {
-        candicates.forEach(func => func(...arguments))
+      result[method] = function(thisArg, ...rest) {
+        candidates.forEach(func => func.call(thisArg, ...rest))
       }
     })
     return result
@@ -102,7 +103,8 @@ const Protocols = {
 
 const NativeMethods = [
   'mergeMeta',
-  'isLegalBar'
+  'isLegalBar',
+  'pushError'
 ]
 
 class TmAPI {
@@ -125,6 +127,15 @@ class TmAPI {
 
   newSettings(settings = {}) {
     return new TmSetting(settings)
+  }
+
+  ParsePlainTrack(track, { Protocol = 'Default', Settings = null } = {}) {
+    const data = this.ParseTrack(track, { Protocol, Settings })
+    const result = data[0]
+    result.Meta.Duration = Math.max(...data.map(track => track.Meta.Duration))
+    // FIXME: error handling
+    result.Content.concat(...data.slice(1).map(track => track.Content))
+    return result
   }
 
   ParseTrack(track, { Protocol = 'Default', Settings = null } = {}) {
@@ -161,6 +172,7 @@ class TmAPI {
           StartTime: note.StartTime + result.Meta.Duration
         })
       }))
+      this.Meta.Duration += src.Meta.Duration
       this.mergeMeta(result, src)
     };
     return result

@@ -6,7 +6,7 @@ class PitchParser {
     PitOp = '',
     Chord = '',
     VolOp = ''
-  }, library, settings, pitchQueue) {
+  }, library, settings, pitchQueue = []) {
     this.Pitch = Pitch
     this.PitOp = PitOp
     this.Chord = Chord
@@ -36,7 +36,7 @@ class PitchParser {
       }))
     } else {
       if (this.Library.Pitch[this.Pitch] !== undefined) {
-        this.Result = this.Library.Pitch[this.Pitch]
+        this.Result = this.Library.Pitch[this.Pitch].map(note => Object.assign({}, note))
         this.Result.forEach(note => {
           if (note.Volume === undefined) note.Volume = 1
           note.Volume *= this.Settings.Volume
@@ -58,6 +58,8 @@ class PitchParser {
           this.Result = []
           this.report('Note::NoPrevious', { Trace: this.Settings.Trace })
         }
+      } else {
+        this.Result = []
       }
     }
   }
@@ -145,14 +147,9 @@ class PitchParser {
   }
 
   checkParse() {
-    Object.defineProperties(this.parse(), {
-      Pitches: { get: function() {
-        return this.map(note => note.Pitch)
-      }},
-      Volumes: { get: function() {
-        return this.map(note => note.Volume)
-      }}
-    })
+    this.parse()
+    this.Result.Pitches = this.Result.map(note => note.Pitch)
+    this.Result.Volumes = this.Result.map(note => note.Volume)
     if (PitchParser.checkDuplicate(this.Result)) {
       this.report('Note::Reduplicate', { Pitches: this.Result.Pitches })
     }
@@ -188,7 +185,7 @@ class NoteParser {
   }
 
   parse() {
-    const beat = this.parseBeat(note)
+    const beat = this.parseBeat()
     const duration = beat * 60 / this.Settings.Speed
 
     let scale
@@ -202,13 +199,13 @@ class NoteParser {
       scale = 1 - this.Settings.Stac[this.Stac] 
     }
 
-    this.Meta.PitchQueue.push(this.Result.Pitches)
-    this.Meta.Duration += duration
+    delete this.Result.Fixed
     this.Result.forEach(note => {
       note.StartTime = this.Meta.Duration
       note.Duration = duration * scale
     })
-
+    this.Meta.Duration += duration
+    this.Meta.PitchQueue.push(this.Result.Pitches)
     this.Library.Plugin.epiNote(this)
     return {
       Beat: beat,
