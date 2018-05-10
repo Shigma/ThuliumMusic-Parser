@@ -1,5 +1,5 @@
 const TmLoader = require('./Loader')
-const TmSetting = require('./Setting')
+const { TmSetting } = require('./Object')
 const { TrackParser } = require('./Track')
 const TmError = require('./Error')
 const EPSILON = 0.0000000001

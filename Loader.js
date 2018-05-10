@@ -1,5 +1,5 @@
 const { SubtrackParser } = require('./Track')
-const TmSetting = require('./Setting')
+const { TmSetting } = require('./Object')
 
 const methodTypes = [
   'proGlobal',
@@ -18,7 +18,6 @@ class TmLoader {
     this.Chord = TmLoader.loadChord(syntax.Chord)
     this.Plugin = TmLoader.loadPlugin(syntax.Class)
     this.Package = new TmPackage(syntax.Code, syntax.Dict)
-    this.MetaInit = syntax.Meta
     this.Track = {}
   }
 

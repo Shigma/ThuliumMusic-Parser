@@ -53,10 +53,11 @@ class PitchParser {
         }
       } else if (this.Pitch === '%') {
         if (this.PitchQueue.length >= this.Settings.Trace) {
-          this.Result = this.PitchQueue[this.PitchQueue.length - this.Settings.Trace].map(pitch => {
+          const trace = this.PitchQueue[this.PitchQueue.length - this.Settings.Trace]
+          this.Result = trace.map(note => {
             return {
-              Pitch: pitch,
-              Volume: 1,
+              Pitch: note.Pitch,
+              Volume: note.Volume / trace[0].Volume,
               Fixed: false
             }
           })
@@ -154,13 +155,11 @@ class PitchParser {
 
   checkParse() {
     this.parse()
-    this.Result.Pitches = this.Result.map(note => note.Pitch)
-    this.Result.Volumes = this.Result.map(note => note.Volume)
     if (PitchParser.checkDuplicate(this.Result)) {
-      this.report('Note::Reduplicate', { Pitches: this.Result.Pitches })
+      this.report('Note::Reduplicate', { Pitches: this.Result.map(note => note.Pitch) })
     }
     if (PitchParser.checkVolume(this.Result)) {
-      this.report('Note::VolumeRange', { Volumes: this.Result.Volumes })
+      this.report('Note::VolumeRange', { Volumes: this.Result.map(note => note.Volume) })
     }
     return {
       Result: this.Result,
@@ -211,7 +210,9 @@ class NoteParser {
       note.Duration = duration * scale
     })
     this.Meta.Duration += duration
-    this.Meta.PitchQueue.push(this.Result.Pitches)
+    if (this.Result.length > 0) {
+      this.Meta.PitchQueue.push(this.Result)
+    }
     this.Library.Plugin.epiNote(this)
     return {
       Beat: beat,

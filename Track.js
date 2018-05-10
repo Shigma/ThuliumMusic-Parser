@@ -1,5 +1,5 @@
 const TmError = require('./Error')
-const TmSetting = require('./Setting')
+const { TmSetting, TmMeta } = require('./Object')
 const { NoteParser, PitchParser } = require('./Note')
 
 function equal(x, y) {
@@ -13,22 +13,7 @@ class TrackParser {
     this.Library = library
     this.Content = track.Content
     this.Settings = sectionSettings.extend()
-    this.Meta = {
-      Index: -1,
-      PitchQueue: [],
-      BarFirst: 0,
-      BarLast: 0,
-      BarCount: 0,
-      Duration: 0,
-      After: {}
-    }
-    for (const attr in library.MetaInit) {
-      if (library.MetaInit[attr] instanceof Array) {
-        this.Meta[attr] = library.MetaInit[attr].slice()
-      } else {
-        this.Meta[attr] = library.MetaInit[attr]
-      }
-    }
+    this.Meta = new TmMeta()
     this.Notation = {}
     for (const name of library.Plugin.Classes) {
       this.Notation[name] = []
@@ -220,7 +205,7 @@ class TrackParser {
         this.Meta.After[token.Type] = true
       }
     }
-    this.Library.Plugin.epiTrack(this)
+    this.Library.Plugin.epiTrack(Object.assign(this, { Result: result }))
     const returnObj = {
       Notation: this.Notation,
       Content: result,
@@ -239,7 +224,7 @@ class TrackParser {
 class SubtrackParser extends TrackParser {
   constructor(track, settings, library, { PitchQueue = [] }) {
     super(track, null, settings, library)
-    this.Meta.PitchQueue = PitchQueue
+    this.Meta.PitchQueue = PitchQueue.slice()
     this.Repeat = track.Repeat
   }
 

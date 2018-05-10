@@ -4,53 +4,27 @@ const effectTypes = [
   'Rev'
 ]
 
-class TmSetting {
-  constructor({
-    Key = 0,
-    Volume = 1,
-    Bar = 4,
-    Beat = 4,
-    Speed = 60,
-    Stac = [0, 1 / 2, 3 / 4],
-    Accent = 2,
-    Light = 1 / 2,
-    Trace = 1,
-    Duration = 0,
-    FadeIn = 0,
-    FadeOut = 0,
-    Rev = 0
-  } = {}) {
-    this.Key = Key
-    this.Bar = Bar
-    this.Beat = Beat
-    this.Speed = Speed
-    this.Volume = Volume
-    this.Stac = Stac
-    this.Accent = Accent
-    this.Light = Light
-    this.Trace = Trace
-    this.Duration = Duration
-    this.FadeIn = FadeIn
-    this.FadeOut = FadeOut
-    this.Rev = Rev
+class TmObject {
+  constructor(initObj) {
+    Object.assign(this, initObj)
   }
 
   getOrSetDefault(key, defaultValue) {
-    if (key in this) {
+    if (key in this && this[key] !== undefined) {
       return this[key]
     } else {
-      if (defaultValue) this[key] = defaultValue
+      this[key] = defaultValue
       return defaultValue
     }
   }
 
   static deepCopy(source) {
     if (source instanceof Array){
-      return source.map(element => TmSetting.deepCopy(element))
+      return source.map(element => TmObject.deepCopy(element))
     } else if (typeof source === 'object') {
       const result = {}
       for (const key in source) {
-        result[key] = TmSetting.deepCopy(source[key])
+        result[key] = TmObject.deepCopy(source[key])
       }
       return result
     } else {
@@ -68,9 +42,59 @@ class TmSetting {
     }
     return settings
   }
+}
 
-  update(settingObj) {
-    Object.assign(this, settingObj)
+class TmMeta extends TmObject {
+  constructor({
+    Index = -1,
+    PitchQueue = [],
+    BarFirst = 0,
+    BarLast = 0,
+    BarCount = 0,
+    Duration = 0,
+    After = {}
+  } = {}) {
+    super({})
+    this.Index = Index
+    this.PitchQueue = PitchQueue
+    this.BarFirst = BarFirst
+    this.BarLast = BarLast
+    this.BarCount = BarCount
+    this.Duration = Duration
+    this.After = After
+  }
+}
+
+class TmSetting extends TmObject {
+  constructor({
+    Key = 0,
+    Volume = 1,
+    Bar = 4,
+    Beat = 4,
+    Speed = 60,
+    Stac = [0, 1 / 2, 3 / 4],
+    Accent = 2,
+    Light = 1 / 2,
+    Trace = 1,
+    Duration = 0,
+    FadeIn = 0,
+    FadeOut = 0,
+    Rev = 0
+  } = {}) {
+    super({})
+    this.Key = Key
+    this.Bar = Bar
+    this.Beat = Beat
+    this.Speed = Speed
+    this.Volume = Volume
+    this.Stac = Stac
+    this.Accent = Accent
+    this.Light = Light
+    this.Trace = Trace
+    this.Duration = Duration
+    this.FadeIn = FadeIn
+    this.FadeOut = FadeOut
+    this.Rev = Rev
   }
 
   /**
@@ -114,11 +138,11 @@ class TmSetting {
   get effects() {
     const result = {}
     effectTypes.forEach(key => {
-      result[key] = TmSetting.deepCopy(this[key])
+      result[key] = TmObject.deepCopy(this[key])
     })
     return result
   }
 }
 
-module.exports = TmSetting
+module.exports = { TmSetting, TmMeta }
 
