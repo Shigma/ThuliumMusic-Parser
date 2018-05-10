@@ -11,7 +11,7 @@ class TrackParser {
     this.ID = track.ID
     this.Instrument = instrument
     this.Library = library
-    this.Content = track.Content
+    this.Source = track.Content
     this.Settings = sectionSettings.extend()
     this.Meta = new TmMeta().extend(library.Meta.Initial)
     this.Notation = {}
@@ -49,7 +49,7 @@ class TrackParser {
         }
       }
     })
-    this.Content = [...this.Instrument.Spec, ...this.Content]
+    this.Source = [...this.Instrument.Spec, ...this.Source]
     const result = this.parseContent()
     const terminal = this.Warnings.findIndex(err => {
       return err.name === 'Track::BarLength' && err.pos.Bar === this.Meta.BarCount
@@ -118,9 +118,9 @@ class TrackParser {
     // FIXME: merge warnings
   }
 
-  parseContent(content = this.Content) {
-    const result = []
-    for (const token of content) {
+  parseContent(source = this.Source) {
+    this.Content = []
+    for (const token of source) {
       this.Meta.Index += 1
       switch (token.Type) {
       case 'Function':
@@ -161,7 +161,7 @@ class TrackParser {
           }))
         }
         this.Meta.Duration += max
-        result.push(...[].concat(...subtracks.map(subtrack => subtrack.Content)))
+        this.Content.push(...[].concat(...subtracks.map(subtrack => subtrack.Content)))
         break
       }
       case 'Note': {
@@ -172,7 +172,7 @@ class TrackParser {
           this.Meta.BarLast += note.Beat
         }
         this.Warnings.push(...note.Warnings)
-        result.push(...note.Result)
+        this.Content.push(...note.Result)
         break
       }
       case 'BarLine':
@@ -205,10 +205,10 @@ class TrackParser {
         this.Meta.After[token.Type] = true
       }
     }
-    this.Library.Plugin.epiTrack(Object.assign(this, { Result: result }))
+    this.Library.Plugin.epiTrack(this)
     const returnObj = {
       Notation: this.Notation,
-      Content: result,
+      Content: this.Content,
       Warnings: this.Warnings,
       Settings: this.Settings,
       Meta: this.Meta
@@ -237,27 +237,27 @@ class SubtrackParser extends TrackParser {
     // FIXME: overlay security
     const results = []
     let lastIndex = 0
-    this.Content.forEach((token, index) => {
+    this.Source.forEach((token, index) => {
       if (token.Type === 'BarLine' && token.Overlay) {
-        results.push(this.parseContent(this.Content.slice(lastIndex, index)))
+        results.push(this.parseContent(this.Source.slice(lastIndex, index)))
         lastIndex = index + 1
         this.Meta.Duration = 0 // FIXME: this.Settings
       }
     })
-    results.push(this.parseContent(this.Content.slice(lastIndex)))
+    results.push(this.parseContent(this.Source.slice(lastIndex)))
     return results
   }
 
   preprocess() {
     if (this.Repeat === undefined) this.Repeat = -1
     if (this.Repeat > 0) {
-      this.Content.forEach((token, index) => {
+      this.Source.forEach((token, index) => {
         if (token.Type === 'BarLine' && token.Skip) {
           this.Warnings.push(new TmError(TmError.Types.Track.UnexpCoda, { Index: index }, { Actual: token }))
         }
       })
       const temp = []
-      const repeatArray = this.Content.filter(token => token.Type === 'BarLine' && token.Order[0] !== 0)
+      const repeatArray = this.Source.filter(token => token.Type === 'BarLine' && token.Order[0] !== 0)
       const defaultOrder = repeatArray.find(token => token.Order.length === 0)
       if (defaultOrder !== undefined) {
         const order = [].concat(...repeatArray.map((token) => token.Order))
@@ -267,7 +267,7 @@ class SubtrackParser extends TrackParser {
       }
       for (let i = 1; i <= this.Repeat; i++) {
         let skip = false
-        for (const token of this.Content) {
+        for (const token of this.Source) {
           if (token.Type !== 'BarLine' || token.Order[0] === 0) {
             if (!skip) {
               temp.push(token)
@@ -285,37 +285,37 @@ class SubtrackParser extends TrackParser {
           Order: [0]
         })
       }
-      this.Content = temp
+      this.Source = temp
     } else {
-      this.Content.forEach((token, index) => {
+      this.Source.forEach((token, index) => {
         if (token.Order instanceof Array && (token.Order.length !== 1 || token.Order[0] !== 0)) {
           this.Warnings.push(new TmError(TmError.Types.Track.UnexpVolta, { index }, { Actual: token }))
         }
       })
-      if (this.Repeat !== -1 && this.Content.length >= 1) {
-        const last = this.Content[this.Content.length - 1]
+      if (this.Repeat !== -1 && this.Source.length >= 1) {
+        const last = this.Source[this.Source.length - 1]
         if (last.Type !== 'BarLine') {
-          this.Content.push({
+          this.Source.push({
             Type: 'BarLine',
             Skip: false,
             Order: [0]
           })
         }
       }
-      const skip = this.Content.findIndex((tok) => tok.Skip === true)
-      for (let index = skip + 1, length = this.Content.length; index < length; index++) {
-        if (this.Content[index].Skip === true) {
+      const skip = this.Source.findIndex((tok) => tok.Skip === true)
+      for (let index = skip + 1, length = this.Source.length; index < length; index++) {
+        if (this.Source[index].Skip === true) {
           this.Warnings.push(new TmError(TmError.Types.Track.MultiCoda, { index }, {}))
         }
       }
       let temp
       if (skip === -1) {
-        temp = new Array(-this.Repeat).fill(this.Content)
+        temp = new Array(-this.Repeat).fill(this.Source)
       } else {
-        temp = new Array(-this.Repeat - 1).fill(this.Content)
-        temp.push(this.Content.slice(0, skip))
+        temp = new Array(-this.Repeat - 1).fill(this.Source)
+        temp.push(this.Source.slice(0, skip))
       }
-      this.Content = [].concat(...temp)
+      this.Source = [].concat(...temp)
     }
   }
 }
