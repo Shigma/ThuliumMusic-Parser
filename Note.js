@@ -204,10 +204,10 @@ class NoteParser {
       scale = 1 - this.Settings.Stac[this.Stac] 
     }
 
-    delete this.Result.Fixed
     this.Result.forEach(note => {
       note.StartTime = this.Meta.Duration
       note.Duration = duration * scale
+      delete note.Fixed
     })
     this.Meta.Duration += duration
     if (this.Result.length > 0) {

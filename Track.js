@@ -206,14 +206,13 @@ class TrackParser {
       }
     }
     this.Library.Plugin.epiTrack(this)
-    const returnObj = {
+    return {
       Notation: this.Notation,
       Content: this.Content,
       Warnings: this.Warnings,
       Settings: this.Settings,
       Meta: this.Meta
     }
-    return returnObj
   }
 
   isLegalBar(bar) {
@@ -224,7 +223,8 @@ class TrackParser {
 class SubtrackParser extends TrackParser {
   constructor(track, settings, library, meta) {
     super(track, null, settings, library)
-    this.Meta.PitchQueue = meta.PitchQueue.slice()
+    this.Meta.PitchQueue = meta.PitchQueue
+    this.Meta.After = Object.assign({}, meta.After)
     for (const attr of library.Meta.Preserved) {
       this.Meta[attr] = meta[attr]
     }
@@ -233,17 +233,22 @@ class SubtrackParser extends TrackParser {
 
   parseTrack() {
     this.preprocess()
-
+    const meta = this.Meta
+    const settings = this.Settings
     // FIXME: overlay security
     const results = []
     let lastIndex = 0
     this.Source.forEach((token, index) => {
       if (token.Type === 'BarLine' && token.Overlay) {
+        this.Meta = meta.extend()
+        this.Settings = settings.extend()
         results.push(this.parseContent(this.Source.slice(lastIndex, index)))
         lastIndex = index + 1
         this.Meta.Duration = 0 // FIXME: this.Settings
       }
     })
+    this.Meta = meta.extend()
+    this.Settings = settings.extend()
     results.push(this.parseContent(this.Source.slice(lastIndex)))
     return results
   }
