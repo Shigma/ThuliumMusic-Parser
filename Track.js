@@ -13,7 +13,7 @@ class TrackParser {
     this.Library = library
     this.Content = track.Content
     this.Settings = sectionSettings.extend()
-    this.Meta = new TmMeta()
+    this.Meta = new TmMeta().extend(library.Meta.Initial)
     this.Notation = {}
     for (const name of library.Plugin.Classes) {
       this.Notation[name] = []
@@ -50,7 +50,7 @@ class TrackParser {
       }
     })
     this.Content = [...this.Instrument.Spec, ...this.Content]
-    const result = this.parseTrackContent()
+    const result = this.parseContent()
     const terminal = this.Warnings.findIndex(err => {
       return err.name === 'Track::BarLength' && err.pos.Bar === this.Meta.BarCount
     })
@@ -73,7 +73,6 @@ class TrackParser {
   // FIXME: static?
   // FIXME: merge notation
   mergeMeta(dest, src) {
-    this.Library.Plugin.proMerge(null, dest, src)
     dest.Meta.PitchQueue = src.Meta.PitchQueue
     dest.Warnings.push(...src.Warnings.map(warning => {
       warning.pos.unshift(Object.assign({}, {
@@ -119,7 +118,7 @@ class TrackParser {
     // FIXME: merge warnings
   }
 
-  parseTrackContent(content = this.Content) {
+  parseContent(content = this.Content) {
     const result = []
     for (const token of content) {
       this.Meta.Index += 1
@@ -147,6 +146,7 @@ class TrackParser {
         } else {
           subtracks = new SubtrackParser(token, this.Settings, this.Library, this.Meta).parseTrack()
         }
+        this.Library.Plugin.proMerge(this, ...subtracks)
         subtracks.forEach(subtrack => {
           this.mergeMeta(this, subtrack)
           subtrack.Content.forEach(note => {
@@ -222,9 +222,12 @@ class TrackParser {
 }
 
 class SubtrackParser extends TrackParser {
-  constructor(track, settings, library, { PitchQueue = [] }) {
+  constructor(track, settings, library, meta) {
     super(track, null, settings, library)
-    this.Meta.PitchQueue = PitchQueue.slice()
+    this.Meta.PitchQueue = meta.PitchQueue.slice()
+    for (const attr of library.Meta.Preserved) {
+      this.Meta[attr] = meta[attr]
+    }
     this.Repeat = track.Repeat
   }
 
@@ -236,12 +239,12 @@ class SubtrackParser extends TrackParser {
     let lastIndex = 0
     this.Content.forEach((token, index) => {
       if (token.Type === 'BarLine' && token.Overlay) {
-        results.push(this.parseTrackContent(this.Content.slice(lastIndex, index)))
+        results.push(this.parseContent(this.Content.slice(lastIndex, index)))
         lastIndex = index + 1
         this.Meta.Duration = 0 // FIXME: this.Settings
       }
     })
-    results.push(this.parseTrackContent(this.Content.slice(lastIndex)))
+    results.push(this.parseContent(this.Content.slice(lastIndex)))
     return results
   }
 

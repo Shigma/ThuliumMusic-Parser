@@ -1,5 +1,5 @@
 const { SubtrackParser } = require('./Track')
-const { TmSetting } = require('./Object')
+const { TmSetting, TmObject } = require('./Object')
 
 const methodTypes = [
   'proGlobal',
@@ -18,14 +18,29 @@ class TmLoader {
     this.Chord = TmLoader.loadChord(syntax.Chord)
     this.Plugin = TmLoader.loadPlugin(syntax.Class)
     this.Package = new TmPackage(syntax.Code, syntax.Dict)
+    this.Meta = TmLoader.loadMeta(syntax.Meta)
     this.Track = {}
+  }
+
+  static loadMeta(meta) {
+    const preserved = [], initial = {}
+    for (const attr in meta) {
+      if (meta[attr].preserve) preserved.push(attr)
+      if (meta[attr].initial) {
+        initial[attr] = meta[attr].initial
+      }
+    }
+    return {
+      Preserved: preserved,
+      Initial: initial
+    }
   }
 
   static loadTypes(types) {
     const result = {}
     for (const type in types) {
       result[type] = {
-        preserve: types[type].preserve === undefined ? true : false,
+        preserve: !types[type].preserve,
         class: types[type].class
       }
     }
