@@ -14,15 +14,15 @@ class TmLoader {
    * @param {Tm.Syntax} Thulium Syntax Object
    */
   constructor(syntax) {
-    this.Types = TmLoader.loadTypes(syntax.Types)
-    this.Chord = TmLoader.loadChord(syntax.Chord)
-    this.Plugin = TmLoader.loadPlugin(syntax.Class)
     this.Package = new TmPackage(syntax.Code, syntax.Dict)
-    this.Meta = TmLoader.loadMeta(syntax.Meta)
+    this.loadTypes(syntax.Types)
+    this.loadChord(syntax.Chord)
+    this.loadPlugin(syntax.Class)
+    this.loadMeta(syntax.Meta)
     this.Track = {}
   }
 
-  static loadMeta(meta) {
+  loadMeta(meta) {
     const preserved = [], initial = {}
     for (const attr in meta) {
       if (meta[attr].preserve) preserved.push(attr)
@@ -30,47 +30,50 @@ class TmLoader {
         initial[attr] = meta[attr].initial
       }
     }
-    return {
+    this.Meta = {
       Preserved: preserved,
       Initial: initial
     }
   }
 
-  static loadTypes(types) {
+  loadTypes(types) {
     const result = {}
     for (const type in types) {
       result[type] = {
-        preserve: !types[type].preserve,
+        preserve: types[type].preserve,
         class: types[type].class
       }
     }
-    return result
+    this.Types = result
   }
 
-  static loadChord(dict) {
+  loadChord(dict) {
     const result = {}
     dict.forEach(chord => {
       result[chord.Notation] = chord.Pitches
     })
-    return result
+    this.Chord = result
   }
 
-  static loadPlugin(plugins) {
-    const result = {
-      Classes: plugins.map(plugin => plugin.Name)
+  loadPlugin(plugins) {
+    this.Notation = function() {
+      const result = {}
+      for (const plugin of plugins) {
+        result[plugin.Name] = []
+      }
+      return result
     }
     methodTypes.forEach(method => {
-      const candidates = [];
+      const candidates = []
       plugins.forEach(plugin => {
         if (method in plugin) {
           candidates.push(plugin[method])
         }
       })
-      result[method] = function(thisArg, ...rest) {
+      this[method] = function(thisArg, ...rest) {
         candidates.forEach(func => func.call(thisArg, ...rest))
       }
     })
-    return result
   }
 }
 
@@ -161,7 +164,7 @@ class TmAPI {
       Settings === null ? this.Settings : this.Settings.extend(Settings),
       this.Library,
       TmAPI.wrap(this.Meta, Protocol)
-    ).parseTrack()
+    ).parse()
   }
 
   ReportError(name, args) {

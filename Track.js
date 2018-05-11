@@ -8,16 +8,13 @@ function equal(x, y) {
 
 class TrackParser {
   constructor(track, instrument, sectionSettings, library) {
-    this.ID = track.ID
+    this.Name = track.Name
     this.Instrument = instrument
     this.Library = library
     this.Source = track.Content
     this.Settings = sectionSettings.extend()
     this.Meta = new TmMeta().extend(library.Meta.Initial)
-    this.Notation = {}
-    for (const name of library.Plugin.Classes) {
-      this.Notation[name] = []
-    }
+    this.Notation = library.Notation()
     this.Warnings = []
   }
 
@@ -28,15 +25,13 @@ class TrackParser {
     } : {}, args))
   }
 
-  parseTrack() {
+  parse() {
     this.Library.Pitch = {}
     this.Instrument.Dict.forEach(macro => {
       if (!(macro.Pitches instanceof Array)) {
         this.Library.Pitch[macro.Name] = Object.assign([{
           Pitch: macro.Pitches
         }], { Generated: true })
-      } else if (macro.Pitches.Generated) {
-        this.Library.Pitch[macro.Name] = macro.Pitches
       } else {
         const data = new PitchParser(
           { Pitch: macro.Pitches },
@@ -66,7 +61,8 @@ class TrackParser {
     }
     result.Effects = this.Settings.effects
     result.Instrument = this.Instrument.Name
-    result.ID = this.ID ? `${this.ID}#${this.Instrument.Name}` : this.Instrument.Name
+    if (!this.Name) this.Name = ''
+    result.Name = `${this.Name}.${this.Instrument.Name}`
     return result
   }
 
@@ -138,15 +134,15 @@ class TrackParser {
             subtracks = [new SubtrackParser({
               Type: 'Subtrack',
               Content: this.Library.Track[token.Name]
-            }, this.Settings, this.Library, this.Meta).parseTrack()]
+            }, this.Settings, this.Library, this.Meta).parse()]
           } else {
             // FIXME: Report Error
             throw new Error(token.Name + ' not found')
           }
         } else {
-          subtracks = new SubtrackParser(token, this.Settings, this.Library, this.Meta).parseTrack()
+          subtracks = new SubtrackParser(token, this.Settings, this.Library, this.Meta).parse()
         }
-        this.Library.Plugin.proMerge(this, ...subtracks)
+        this.Library.proMerge(this, ...subtracks)
         subtracks.forEach(subtrack => {
           this.mergeMeta(this, subtrack)
           subtrack.Content.forEach(note => {
@@ -205,7 +201,7 @@ class TrackParser {
         this.Meta.After[token.Type] = true
       }
     }
-    this.Library.Plugin.epiTrack(this)
+    this.Library.epiTrack(this)
     return {
       Notation: this.Notation,
       Content: this.Content,
@@ -231,7 +227,7 @@ class SubtrackParser extends TrackParser {
     this.Repeat = track.Repeat
   }
 
-  parseTrack() {
+  parse() {
     this.preprocess()
     const meta = this.Meta
     const settings = this.Settings

@@ -57,7 +57,7 @@ class PitchParser {
           this.Result = trace.map(note => {
             return {
               Pitch: note.Pitch,
-              Volume: note.Volume / trace[0].Volume,
+              Volume: note.Volume / trace[0].Volume * this.Settings.Volume,
               Fixed: false
             }
           })
@@ -204,16 +204,16 @@ class NoteParser {
       scale = 1 - this.Settings.Stac[this.Stac] 
     }
 
+    if (this.Result.length > 0) {
+      this.Meta.PitchQueue.push(this.Result.slice())
+    }
     this.Result.forEach(note => {
       note.StartTime = this.Meta.Duration
       note.Duration = duration * scale
       delete note.Fixed
     })
     this.Meta.Duration += duration
-    if (this.Result.length > 0) {
-      this.Meta.PitchQueue.push(this.Result)
-    }
-    this.Library.Plugin.epiNote(this)
+    this.Library.epiNote(this)
     return {
       Beat: beat,
       Result: this.Result,
