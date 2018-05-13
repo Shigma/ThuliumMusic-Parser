@@ -131,10 +131,10 @@ class TrackParser {
           }
         } else if (token.Type === 'Macrotrack') {
           if (token.Name in this.Library.Track) {
-            subtracks = [new SubtrackParser({
+            subtracks = new SubtrackParser({
               Type: 'Subtrack',
               Content: this.Library.Track[token.Name]
-            }, this.Settings, this.Library, this.Meta).parse()]
+            }, this.Settings, this.Library, this.Meta).parse()
           } else {
             // FIXME: Report Error
             throw new Error(token.Name + ' not found')

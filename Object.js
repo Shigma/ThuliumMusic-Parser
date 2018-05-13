@@ -33,12 +33,12 @@ class TmObject {
   }
 
   extend(settingObj = {}) {
-    const settings = new TmSetting()
+    const settings = new this.constructor()
     for (const setting in this) {
-      settings[setting] = TmSetting.deepCopy(this[setting])
+      settings[setting] = TmObject.deepCopy(this[setting])
     }
     for (const setting in settingObj) {
-      settings[setting] = TmSetting.deepCopy(settingObj[setting])
+      settings[setting] = TmObject.deepCopy(settingObj[setting])
     }
     return settings
   }
