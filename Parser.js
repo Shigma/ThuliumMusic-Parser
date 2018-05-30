@@ -101,6 +101,7 @@ class Parser {
             statistics[inst.Name] = 1
           }
           data.Name += '.' + String(statistics[inst.Name])
+          data.Index = track.Index
           trackResult.push(data)
         }
         result.push(...trackResult)
