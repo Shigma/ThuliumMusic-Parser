@@ -61,11 +61,13 @@ class Parser {
 
   expandSection() {
     const result = []
-    for (const section of this.Sections) {
+    for (let index = 0; index < this.Sections.length; index++) {
+      const section = this.Sections[index]
+      section.Index = index
+      section.Type = 'Section'
       result.push(...section.Prolog, section, ...section.Epilog)
       delete section.Prolog
       delete section.Epilog
-      section.Type = 'Section'
     }
     this.Sections = result
   }
@@ -134,7 +136,8 @@ class Parser {
     // }
     return {
       Tracks: result,
-      Warnings: warnings
+      Warnings: warnings,
+      Index: section.Index
     }
   }
 }
