@@ -99,7 +99,6 @@ class TmSetting extends TmObject {
 
   /**
    *
-   * @param {tmSetting} tmSetting
    * @param {string} key
    * @param {number} value
    * @param {function} criterion

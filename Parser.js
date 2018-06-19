@@ -21,7 +21,7 @@ const defaultInstrument = {
 class Parser {
   /**
    * Tm Parser
-   * @param {data} tokenizedData 经过tok的JSON对象
+   * @param {data} data 经过tok的JSON对象
    * @example
    * new Parser(tokenizedData)
    */

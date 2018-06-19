@@ -11,7 +11,7 @@ const methodTypes = [
 class TmLoader {
   /**
    * Tm Library Loader
-   * @param {Tm.Syntax} Thulium Syntax Object
+   * @param syntax - Thulium Syntax Object
    */
   constructor(syntax) {
     this.Package = new TmPackage(syntax.Code, syntax.Dict)
@@ -93,19 +93,19 @@ class TmPackage {
   static getArguments(args) {
     return args.map(arg => {
       switch (arg.Type) {
-      case 'Number':
-      case 'String':
-      case 'Array':
-        return arg.Content
-      case 'Expression':
-        // FIXME: using expression parser
-        /* eslint-disable-next-line no-eval */
-        return eval(arg.Content.replace(/Log2/g, 'Math.log2'))
-      default:
-        return {
-          Type: 'Subtrack',
-          Content: [arg]
-        }
+        case 'Number':
+        case 'String':
+        case 'Array':
+          return arg.Content
+        case 'Expression':
+          // FIXME: using expression parser
+          /* eslint-disable-next-line no-eval */
+          return eval(arg.Content.replace(/Log2/g, 'Math.log2'))
+        default:
+          return {
+            Type: 'Subtrack',
+            Content: [arg]
+          }
       }
     })
   }
@@ -127,9 +127,9 @@ const NativeMethods = [
 class TmAPI {
   /**
    * Thulium API
-   * @param {TmParser} Thulium Parser Object
-   * @param {TmToken} Function Token
-   * @param {TmPackageDict} Map of Functions
+   * @param {TmParser} parser - Thulium Parser Object
+   * @param {TmToken} token - Function Token
+   * @param {TmPackageDict} dict - Map of Functions
    */
   constructor(parser, token, dict) {
     Object.assign(this, parser)
@@ -191,7 +191,7 @@ class TmAPI {
       }))
       this.Meta.Duration += src.Meta.Duration
       this.mergeMeta(result, src)
-    };
+    }
     return result
   }
 

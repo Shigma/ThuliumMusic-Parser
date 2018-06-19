@@ -119,86 +119,87 @@ class TrackParser {
     for (const token of source) {
       this.Meta.Index += 1
       switch (token.Type) {
-      case 'Function':
-      case 'Subtrack': 
-      case 'Macrotrack': {
-        let subtracks
-        if (token.Type === 'Function') {
-          subtracks = [this.Library.Package.applyFunction(this, token)]
-          if (subtracks[0] === undefined) {
-            break
+        case 'Function':
+        case 'Subtrack': 
+        case 'Macrotrack': {
+          let subtracks
+          if (token.Type === 'Function') {
+            subtracks = [this.Library.Package.applyFunction(this, token)]
+            if (subtracks[0] === undefined) {
+              break
             // FIXME: Test && Report Error ?
-          }
-        } else if (token.Type === 'Macrotrack') {
-          if (token.Name in this.Library.Track) {
-            subtracks = new SubtrackParser({
-              Type: 'Subtrack',
-              Content: this.Library.Track[token.Name]
-            }, this.Settings, this.Library, this.Meta).parse()
-          } else {
+            }
+          } else if (token.Type === 'Macrotrack') {
+            if (token.Name in this.Library.Track) {
+              subtracks = new SubtrackParser({
+                Type: 'Subtrack',
+                Content: this.Library.Track[token.Name]
+              }, this.Settings, this.Library, this.Meta).parse()
+            } else {
             // FIXME: Report Error
-            throw new Error(token.Name + ' not found')
+              throw new Error(token.Name + ' not found')
+            }
+          } else {
+            subtracks = new SubtrackParser(token, this.Settings, this.Library, this.Meta).parse()
           }
-        } else {
-          subtracks = new SubtrackParser(token, this.Settings, this.Library, this.Meta).parse()
-        }
-        this.Library.proMerge(this, ...subtracks)
-        subtracks.forEach(subtrack => {
-          this.mergeMeta(this, subtrack)
-          subtrack.Content.forEach(note => {
-            note.StartTime += this.Meta.Duration
+          this.Library.proMerge(this, ...subtracks)
+          subtracks.forEach(subtrack => {
+            this.mergeMeta(this, subtrack)
+            subtrack.Content.forEach(note => {
+              note.StartTime += this.Meta.Duration
+            })
           })
-        })
-        const max = Math.max(...subtracks.map(subtrack => subtrack.Meta.Duration))
-        if (!subtracks.every(subtrack => equal(subtrack.Meta.Duration, max))) {
-          this.Warnings.push(new TmError('Track::DiffDuration', {}, {
-            Expected: subtracks.map(() => max),
-            Actual: subtracks.map(subtrack => subtrack.Meta.Duration)
-          }))
+          const max = Math.max(...subtracks.map(subtrack => subtrack.Meta.Duration))
+          if (!subtracks.every(subtrack => equal(subtrack.Meta.Duration, max))) {
+            this.Warnings.push(new TmError('Track::DiffDuration', {}, {
+              Expected: subtracks.map(() => max),
+              Actual: subtracks.map(subtrack => subtrack.Meta.Duration)
+            }))
+          }
+          this.Meta.Duration += max
+          this.Content.push(...[].concat(...subtracks.map(subtrack => subtrack.Content)))
+          break
         }
-        this.Meta.Duration += max
-        this.Content.push(...[].concat(...subtracks.map(subtrack => subtrack.Content)))
-        break
-      }
-      case 'Note': {
-        const note = new NoteParser(token, this.Library, this.Settings, this.Meta).parse()
-        if (this.Meta.BarCount === 0) {
-          this.Meta.BarFirst += note.Beat
-        } else {
-          this.Meta.BarLast += note.Beat
+        case 'Note': {
+          const note = new NoteParser(token, this.Library, this.Settings, this.Meta).parse()
+          if (this.Meta.BarCount === 0) {
+            this.Meta.BarFirst += note.Beat
+          } else {
+            this.Meta.BarLast += note.Beat
+          }
+          this.Warnings.push(...note.Warnings)
+          this.Content.push(...note.Result)
+          break
         }
-        this.Warnings.push(...note.Warnings)
-        this.Content.push(...note.Result)
-        break
-      }
-      case 'BarLine':
-        if (this.Meta.BarLast > 0) {
-          this.Meta.BarCount += 1
+        case 'BarLine':
+          if (this.Meta.BarLast > 0) {
+            this.Meta.BarCount += 1
+          }
+          if (!this.isLegalBar(this.Meta.BarLast)) {
+            this.pushError(TmError.Types.Track.BarLength, {
+              Expected: this.Settings.Bar,
+              Actual: this.Meta.BarLast,
+              Time: this.Meta.Duration
+            })
+          }
+          this.Meta.BarLast = 0
+          break
+        case 'Clef':
+        case 'Comment':
+        case 'Space':
+          break
+        default: {
+          const attributes = this.Library.Types[token.Type]
+          if (attributes.preserve) {
+            this.Notation[attributes.class].push({
+              Type: token.Type,
+              Bar: this.Meta.BarCount,
+              Index: this.Meta.Index,
+              Time: this.Meta.Duration
+            })
+          }
+          this.Meta.After[token.Type] = true
         }
-        if (!this.isLegalBar(this.Meta.BarLast)) {
-          this.pushError(TmError.Types.Track.BarLength, {
-            Expected: this.Settings.Bar,
-            Actual: this.Meta.BarLast,
-            Time: this.Meta.Duration
-          })
-        }
-        this.Meta.BarLast = 0
-        break
-      case 'Clef':
-      case 'Comment':
-      case 'Space':
-        break
-      default:
-        const attributes = this.Library.Types[token.Type]
-        if (attributes.preserve) {
-          this.Notation[attributes.class].push({
-            Type: token.Type,
-            Bar: this.Meta.BarCount,
-            Index: this.Meta.Index,
-            Time: this.Meta.Duration
-          })
-        }
-        this.Meta.After[token.Type] = true
       }
     }
     this.Library.epiTrack(this)

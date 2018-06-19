@@ -229,23 +229,24 @@ class NoteParser {
       const char = this.DurOp.charAt(pointer)
       pointer += 1
       switch (char) {
-      case '=':
-        beat /= 4
-        break
-      case '-':
-        beat += 1
-        break
-      case '_':
-        beat /= 2
-        break
-      case '.':
-        let dotCount = 1
-        while (this.DurOp.charAt(pointer) === '.') {
-          dotCount += 1
-          pointer += 1
+        case '=':
+          beat /= 4
+          break
+        case '-':
+          beat += 1
+          break
+        case '_':
+          beat /= 2
+          break
+        case '.': {
+          let dotCount = 1
+          while (this.DurOp.charAt(pointer) === '.') {
+            dotCount += 1
+            pointer += 1
+          }
+          beat *= 2 - Math.pow(2, -dotCount)
+          break
         }
-        beat *= 2 - Math.pow(2, -dotCount)
-        break
       }
     }
     return beat * Math.pow(2, -this.Settings.Duration)
